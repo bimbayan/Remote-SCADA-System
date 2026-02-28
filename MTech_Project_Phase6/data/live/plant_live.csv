@@ -1,0 +1,7 @@
+ts,inverter_id,panel_id,GHI,P_DC_kW,rated_kw,status,AmbientTemp_C,P_AC_kW,Energy_increment_kWh,Total_energy_kWh,transformer_loss_kw,transformer_eff,battery_soc,battery_voltage,battery_temp_c,battery_power_kw
+2025-12-27T18:08:10,INV-01,"PV-01,PV-02",4.5,0.435,100.0,Running,18.76,0.429,0.000596,0.992418,,,,,,
+2025-12-27T18:08:10,INV-02,"PV-03,PV-04",4.5,0.445,100.0,Running,20.8,0.417,0.00058,0.997858,,,,,,
+2025-12-27T18:08:10,INV-03,"PV-05,PV-06",4.5,0.447,100.0,Running,18.41,0.432,0.000601,0.993321,,,,,,
+2025-12-27T18:08:10,INV-04,"PV-07,PV-08",4.5,0.456,100.0,Running,19.19,0.436,0.000606,0.994237,,,,,,
+2025-12-27T18:08:10,INV-05,"PV-09,PV-10",4.5,0.426,100.0,Running,22.67,0.413,0.000574,0.998389,,,,,,
+2025-12-27T18:08:10,PLANT_SUMMARY,,4.5,2.209,500.0,Running,22.67,102.128,0.141845,4.976223,6.174,0.9395,29.7,530.48,24.71,-100.0
