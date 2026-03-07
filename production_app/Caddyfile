@@ -1,0 +1,10 @@
+# Caddyfile
+
+remotescadasystem.com, www.remotescadasystem.com {
+    reverse_proxy dashboard:8501
+}
+
+# Fallback basic proxy for port 80 (Development/IP based access)
+:80 {
+    reverse_proxy dashboard:8501
+}

@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  caddy:
+    image: caddy:2.7-alpine
+    container_name: caddy_proxy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - dashboard
+
+  simulator:
+    build: .
+    container_name: scada_simulator
+    command: python src/simulator.py
+    env_file:
+      - .env
+    volumes:
+      - scada_data:/app/data
+    restart: always
+
+  dashboard:
+    build: .
+    container_name: scada_dashboard
+    env_file:
+      - .env
+    volumes:
+      - scada_data:/app/data
+    depends_on:
+      - simulator
+    restart: always
+
+volumes:
+  scada_data:
+  caddy_data:
+  caddy_config:

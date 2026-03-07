@@ -1,0 +1,13 @@
+credentials:
+  usernames:
+    admin:
+      email: admin@scada.local
+      name: Plant Manager
+      password: $2b$12$wMve7Ow3/Lf99w.wDrfdmewxzBj87SjE8OTSv6PwEc4oFQ23KpPdq
+cookie:
+  expiry_days: 1
+  key: scada_secure_signature_123
+  name: scada_cookie
+pre-authorized:
+  emails:
+  - plant_operator@scada.local

@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env
+
+# Runtime data (SQLite, live CSV, logs) — do NOT commit
+production_app/data/scada.db
+production_app/data/scada.db-shm
+production_app/data/scada.db-wal
+production_app/data/live/
+production_app/data/logs/
+
+# Streamlit secrets (never commit credentials)
+.streamlit/secrets.toml
+production_app/.streamlit/secrets.toml
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Misc
+*.log
+*.tmp
