@@ -9,14 +9,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source code
 COPY . .
 
-# Create a non-root user and set permissions
-RUN adduser --disabled-password --gecos '' scada_user && \
-    mkdir -p /app/data && \
-    chown -R scada_user:scada_user /app
+# Create dirs and fix permissions
+RUN mkdir -p /app/data/live /app/data/logs && \
+    chmod +x /app/run.sh
 
-USER scada_user
+# Railway dynamically assigns $PORT — default 8501 if not set
+ENV PORT=8501
 
-# Expose Streamlit default port
+# Expose port (Railway will override via $PORT env var)
 EXPOSE 8501
 
-ENTRYPOINT ["streamlit", "run", "src/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# run.sh: starts simulator in background, then starts Streamlit on $PORT
+ENTRYPOINT ["/bin/bash", "-c", "python src/simulator.py & sleep 3 && streamlit run src/app.py --server.port=${PORT} --server.address=0.0.0.0 --server.headless=true"]
