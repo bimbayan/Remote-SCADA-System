@@ -18,6 +18,20 @@ if SRC_DIR not in sys.path:
 
 from database import get_engine
 
+# Start the simulator as a background thread inside the Streamlit process.
+# The Dockerfile's separate background process doesn't capture stdout/stderr.
+@st.cache_resource
+def _start_simulator_thread():
+    import threading, sys
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
+    from simulator import run_simulator
+    t = threading.Thread(target=run_simulator, daemon=True, name="SimulatorThread")
+    t.start()
+    print(f"[APP] Simulator thread started: {t.name}", flush=True)
+    return t
+
+_start_simulator_thread()
+
 st.set_page_config(page_title="PV SCADA UI", layout="wide", initial_sidebar_state="expanded")
 
 # CUSTOM CSS FOR INDUSTRIAL LOOK

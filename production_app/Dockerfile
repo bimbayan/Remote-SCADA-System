@@ -15,11 +15,10 @@ RUN mkdir -p /app/data/live /app/data/logs && \
 
 # Railway dynamically assigns $PORT — default 8501 if not set
 ENV PORT=8501
+ENV PYTHONUNBUFFERED=1
 
 # Expose port (Railway will override via $PORT env var)
 EXPOSE 8501
 
-# run.sh: starts simulator in background, then starts Streamlit on $PORT
-ENV PYTHONUNBUFFERED=1
-
-ENTRYPOINT ["/bin/bash", "-c", "python src/simulator.py & sleep 8 && streamlit run src/app.py --server.port=${PORT} --server.address=0.0.0.0 --server.headless=true"]
+# Streamlit starts the simulator internally as a background thread
+ENTRYPOINT ["/bin/bash", "-c", "streamlit run src/app.py --server.port=${PORT} --server.address=0.0.0.0 --server.headless=true"]
