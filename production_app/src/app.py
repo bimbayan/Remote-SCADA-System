@@ -194,15 +194,11 @@ def load_live_data():
     except Exception:
         return None
 
-# Wait for background simulator to populate data (Docker starts it separately)
-import time as _time
-df = load_live_data()
-if df is None:
-    for _attempt in range(6):
-        _time.sleep(2)
-        df = load_live_data()
-        if df is not None:
-            break
+# Load data — autorefresh handles retry every 5 seconds
+try:
+    df = load_live_data()
+except Exception:
+    df = None
 
 authenticator.logout('Logout', 'sidebar', key="logout_btn")
 
