@@ -60,7 +60,7 @@ start_time = datetime.now().replace(microsecond=0)
 # 2.  Hardware objects
 # ------------------------------------------------------------------
 battery = {
-    "soc": 0.5,
+    "soc": 1.0,  # Refreshed battery SOC to 100%
     "capacity_kwh": BATTERY_CAPACITY_KWH,
     "temp_c": 25.0,
     "voltage": 600.0
@@ -179,6 +179,16 @@ def update_plot(ax, t_hist, p_hist, b_pwr_hist, soc_hist):
 # 6.  Main loop
 # ------------------------------------------------------------------
 def run_simulator(duration_minutes=999999):
+    import fcntl
+    import sys
+    lock_file = os.path.join(OUT_DIR, "simulator.lock")
+    lock_fd = open(lock_file, "w")
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except IOError:
+        print("Another simulator instance is already running.", flush=True)
+        sys.exit(0)
+
     ts = start_time
     end_ts = ts + timedelta(minutes=duration_minutes)
 
@@ -242,7 +252,11 @@ def run_simulator(duration_minutes=999999):
         if plant_total_ac > 0.9 * PLANT_CAPACITY_KW:
             net_batt_kw = min(battery_max_power_kw(), plant_total_ac - 0.9 * PLANT_CAPACITY_KW)
         elif plant_total_ac < 0.5 * PLANT_CAPACITY_KW:
-            net_batt_kw = -min(battery_max_power_kw(), 0.5*PLANT_CAPACITY_KW - plant_total_ac)
+            if battery["soc"] > 0.01:
+                net_batt_kw = -min(battery_max_power_kw(), 0.5*PLANT_CAPACITY_KW - plant_total_ac)
+            else:
+                net_batt_kw = 0
+                
         battery_step(net_batt_kw, dt)
         if net_batt_kw < 0:
             plant_total_ac += abs(net_batt_kw)

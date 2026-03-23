@@ -18,6 +18,16 @@ if SRC_DIR not in sys.path:
 
 from database import get_engine
 
+@st.cache_resource
+def start_simulator_daemon():
+    import subprocess
+    import sys
+    print("Starting simulator daemon...", flush=True)
+    subprocess.Popen([sys.executable, os.path.join(SRC_DIR, "simulator.py")])
+    return True
+
+start_simulator_daemon()
+
 st.set_page_config(page_title="PV SCADA UI", layout="wide", initial_sidebar_state="expanded")
 
 # CUSTOM CSS FOR INDUSTRIAL LOOK
