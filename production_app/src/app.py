@@ -18,17 +18,6 @@ if SRC_DIR not in sys.path:
 
 from database import get_engine
 
-@st.cache_resource
-def start_simulator_daemon():
-    import threading
-    from simulator import run_simulator
-    print("Starting simulator thread...", flush=True)
-    t = threading.Thread(target=run_simulator, daemon=True)
-    t.start()
-    return t
-
-start_simulator_daemon()
-
 st.set_page_config(page_title="PV SCADA UI", layout="wide", initial_sidebar_state="expanded")
 
 # CUSTOM CSS FOR INDUSTRIAL LOOK
@@ -182,17 +171,24 @@ st_autorefresh(interval=5000, limit=None, key="scada_dashboard_refresh")
 # =========================================================
 def load_live_data():
     engine = get_engine()
-    import traceback
     try:
         df = pd.read_sql("SELECT * FROM plant_live ORDER BY ts DESC LIMIT 300", con=engine)
-        if df.empty: return "EMPTY"
+        if df.empty: return None
         df = df.sort_values("ts").reset_index(drop=True)
         df["ts"] = pd.to_datetime(df["ts"], errors="coerce")
         return df.dropna(subset=["ts"])
-    except Exception as e:
-        return traceback.format_exc()
+    except Exception:
+        return None
 
+# Wait for background simulator to populate data (Docker starts it separately)
+import time as _time
 df = load_live_data()
+if df is None:
+    for _attempt in range(6):
+        _time.sleep(2)
+        df = load_live_data()
+        if df is not None:
+            break
 
 authenticator.logout('Logout', 'sidebar', key="logout_btn")
 
@@ -203,8 +199,7 @@ st.sidebar.markdown("---")
 menu = st.sidebar.radio(
     "Navigation",
     ["📊 Dashboard", "⚙️ Plant Control", "🏠 Home", "🗺️ Overview", "🏢 Substation", "🔔 Alarm", "📈 Trend", "🔌 Utilities"],
-    label_visibility="collapsed"
-)
+    label_visibility="collapsed")
 
 # ── Sidebar Alarm Ticker ────────────────────────────────────
 st.sidebar.markdown("---")
@@ -231,11 +226,8 @@ try:
 except Exception:
     pass
 
-if df is None or isinstance(df, str):
-    if df == "EMPTY":
-        st.warning("Database is empty. Simulator may be preparing initial snapshots...")
-    else:
-        st.error(f"Simulator Data Error Trace:\n\n```\n{df}\n```")
+if df is None:
+    st.warning("Waiting for simulator data... The background simulator process may still be starting up.")
     st.stop()
 
 plant_rows = df[df["inverter_id"] == "PLANT_SUMMARY"]

@@ -178,16 +178,14 @@ def update_plot(ax, t_hist, p_hist, b_pwr_hist, soc_hist):
 # ------------------------------------------------------------------
 # 6.  Main loop
 # ------------------------------------------------------------------
+_simulator_running = False
+
 def run_simulator(duration_minutes=999999):
-    import fcntl
-    import sys
-    lock_file = os.path.join(OUT_DIR, "simulator.lock")
-    lock_fd = open(lock_file, "w")
-    try:
-        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except IOError:
-        print("Another simulator instance is already running.", flush=True)
-        sys.exit(0)
+    global _simulator_running
+    if _simulator_running:
+        print("Simulator already running, skipping.", flush=True)
+        return
+    _simulator_running = True
 
     ts = start_time
     end_ts = ts + timedelta(minutes=duration_minutes)

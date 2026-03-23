@@ -20,4 +20,6 @@ ENV PORT=8501
 EXPOSE 8501
 
 # run.sh: starts simulator in background, then starts Streamlit on $PORT
-ENTRYPOINT ["/bin/bash", "-c", "python src/simulator.py & sleep 3 && streamlit run src/app.py --server.port=${PORT} --server.address=0.0.0.0 --server.headless=true"]
+ENV PYTHONUNBUFFERED=1
+
+ENTRYPOINT ["/bin/bash", "-c", "python src/simulator.py & sleep 8 && streamlit run src/app.py --server.port=${PORT} --server.address=0.0.0.0 --server.headless=true"]
