@@ -21,13 +21,18 @@ def write_snapshot(rows):
     engine = get_engine()
     df = pd.DataFrame(rows)
     df.to_sql("plant_live", con=engine, if_exists="append", index=False)
+    print(f"[DB] Wrote {len(rows)} rows to plant_live", flush=True)
     
     # Optional cleanup to keep DB small (keep approx 1000 snapshots for the rolling window)
     try:
         with engine.begin() as con:
+            # Check how many rows exist before cleanup
+            count_before = con.execute(sa.text("SELECT count(*) FROM plant_live")).scalar()
             con.execute(sa.text("DELETE FROM plant_live WHERE ts <= strftime('%Y-%m-%dT%H:%M:%S', 'now', '-1 hours')"))
-    except Exception:
-        pass
+            count_after = con.execute(sa.text("SELECT count(*) FROM plant_live")).scalar()
+            print(f"[DB] Cleanup: {count_before} -> {count_after} rows", flush=True)
+    except Exception as e:
+        print(f"[DB] Cleanup error: {e}", flush=True)
 # ------------------------------------------------------------------
 # 1.  Folders / constants
 # ------------------------------------------------------------------
@@ -186,7 +191,17 @@ def run_simulator(duration_minutes=999999):
         print("Simulator already running, skipping.", flush=True)
         return
     _simulator_running = True
+    print(f"[SIM] Starting simulator at {start_time}", flush=True)
 
+    try:
+        _run_simulator_inner(duration_minutes)
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        print("[SIM] SIMULATOR CRASHED!", flush=True)
+        _simulator_running = False
+
+def _run_simulator_inner(duration_minutes):
     ts = start_time
     end_ts = ts + timedelta(minutes=duration_minutes)
 
