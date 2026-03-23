@@ -20,11 +20,12 @@ from database import get_engine
 
 @st.cache_resource
 def start_simulator_daemon():
-    import subprocess
-    import sys
-    print("Starting simulator daemon...", flush=True)
-    subprocess.Popen([sys.executable, os.path.join(SRC_DIR, "simulator.py")])
-    return True
+    import threading
+    from simulator import run_simulator
+    print("Starting simulator thread...", flush=True)
+    t = threading.Thread(target=run_simulator, daemon=True)
+    t.start()
+    return t
 
 start_simulator_daemon()
 
@@ -179,7 +180,6 @@ st_autorefresh(interval=5000, limit=None, key="scada_dashboard_refresh")
 # =========================================================
 # DATA LOADERS
 # =========================================================
-@st.cache_data(ttl=5)
 def load_live_data():
     engine = get_engine()
     try:
