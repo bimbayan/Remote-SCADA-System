@@ -191,14 +191,13 @@ def load_live_data():
         df = df.sort_values("ts").reset_index(drop=True)
         df["ts"] = pd.to_datetime(df["ts"], errors="coerce")
         return df.dropna(subset=["ts"])
-    except Exception:
+    except Exception as e:
+        import traceback
+        st.error(f"load_live_data error:\n```\n{traceback.format_exc()}\n```")
         return None
 
 # Load data — autorefresh handles retry every 5 seconds
-try:
-    df = load_live_data()
-except Exception:
-    df = None
+df = load_live_data()
 
 authenticator.logout('Logout', 'sidebar', key="logout_btn")
 
@@ -237,7 +236,27 @@ except Exception:
     pass
 
 if df is None:
-    st.warning("Waiting for simulator data... The background simulator process may still be starting up.")
+    # Show diagnostic info to debug why data is missing
+    import sqlalchemy as sa
+    diag = []
+    try:
+        _eng = get_engine()
+        from database import DB_PATH
+        diag.append(f"**DB Path:** `{DB_PATH}`")
+        diag.append(f"**DB exists:** `{os.path.exists(DB_PATH)}`")
+        with _eng.connect() as _conn:
+            tables = _conn.execute(sa.text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()
+            diag.append(f"**Tables:** `{[t[0] for t in tables]}`")
+            for t in tables:
+                cnt = _conn.execute(sa.text(f"SELECT count(*) FROM [{t[0]}]")).scalar()
+                diag.append(f"  - `{t[0]}`: **{cnt}** rows")
+            if any(t[0] == 'plant_live' for t in tables):
+                sample = _conn.execute(sa.text("SELECT ts, inverter_id FROM plant_live ORDER BY rowid DESC LIMIT 3")).fetchall()
+                diag.append(f"**Latest plant_live rows:** `{sample}`")
+    except Exception as ex:
+        diag.append(f"**Diagnostic error:** `{ex}`")
+    st.warning("Waiting for simulator data...")
+    st.code("\n".join(diag))
     st.stop()
 
 plant_rows = df[df["inverter_id"] == "PLANT_SUMMARY"]
