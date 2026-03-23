@@ -182,14 +182,15 @@ st_autorefresh(interval=5000, limit=None, key="scada_dashboard_refresh")
 # =========================================================
 def load_live_data():
     engine = get_engine()
+    import traceback
     try:
         df = pd.read_sql("SELECT * FROM plant_live ORDER BY ts DESC LIMIT 300", con=engine)
-        if df.empty: return None
+        if df.empty: return "EMPTY"
         df = df.sort_values("ts").reset_index(drop=True)
         df["ts"] = pd.to_datetime(df["ts"], errors="coerce")
         return df.dropna(subset=["ts"])
-    except Exception:
-        return None
+    except Exception as e:
+        return traceback.format_exc()
 
 df = load_live_data()
 
@@ -230,8 +231,11 @@ try:
 except Exception:
     pass
 
-if df is None:
-    st.warning("Waiting for simulator data...")
+if df is None or isinstance(df, str):
+    if df == "EMPTY":
+        st.warning("Database is empty. Simulator may be preparing initial snapshots...")
+    else:
+        st.error(f"Simulator Data Error Trace:\n\n```\n{df}\n```")
     st.stop()
 
 plant_rows = df[df["inverter_id"] == "PLANT_SUMMARY"]
