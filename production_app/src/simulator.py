@@ -22,15 +22,14 @@ def write_snapshot(rows):
     df = pd.DataFrame(rows)
     df.to_sql("plant_live", con=engine, if_exists="append", index=False)
     print(f"[DB] Wrote {len(rows)} rows to plant_live", flush=True)
-    
-    # Optional cleanup to keep DB small (keep approx 1000 snapshots for the rolling window)
+
+    # Lightweight cleanup: keep only last 2000 rows (approx 30 min of data)
     try:
         with engine.begin() as con:
-            # Check how many rows exist before cleanup
-            count_before = con.execute(sa.text("SELECT count(*) FROM plant_live")).scalar()
-            con.execute(sa.text("DELETE FROM plant_live WHERE ts <= strftime('%Y-%m-%dT%H:%M:%S', 'now', '-1 hours')"))
-            count_after = con.execute(sa.text("SELECT count(*) FROM plant_live")).scalar()
-            print(f"[DB] Cleanup: {count_before} -> {count_after} rows", flush=True)
+            total = con.execute(sa.text("SELECT count(*) FROM plant_live")).scalar()
+            if total and total > 2000:
+                con.execute(sa.text(f"DELETE FROM plant_live WHERE rowid NOT IN (SELECT rowid FROM plant_live ORDER BY rowid DESC LIMIT 2000)"))
+                print(f"[DB] Trimmed plant_live from {total} to ~2000 rows", flush=True)
     except Exception as e:
         print(f"[DB] Cleanup error: {e}", flush=True)
 # ------------------------------------------------------------------
