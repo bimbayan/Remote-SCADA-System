@@ -11,6 +11,7 @@ COPY . .
 
 # Create dirs and fix permissions
 RUN mkdir -p /app/data/live /app/data/logs && \
+    chmod -R 777 /app/data && \
     chmod +x /app/run.sh
 
 # Railway dynamically assigns $PORT — default 8501 if not set
@@ -20,5 +21,5 @@ ENV PYTHONUNBUFFERED=1
 # Expose port (Railway will override via $PORT env var)
 EXPOSE 8501
 
-# Streamlit starts the simulator internally as a background thread
-ENTRYPOINT ["/bin/bash", "-c", "streamlit run src/app.py --server.port=${PORT} --server.address=0.0.0.0 --server.headless=true"]
+# Entrypoint script will start the simulator and the streamlit app
+ENTRYPOINT ["/app/run.sh"]

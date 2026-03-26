@@ -9,4 +9,4 @@ sleep 2
 
 # Start the Streamlit application
 echo "Starting SCADA Streamlit UI..."
-streamlit run src/app.py --server.port=8501 --server.address=0.0.0.0
+streamlit run src/app.py --server.port=${PORT:-8501} --server.address=0.0.0.0 --server.headless=true
