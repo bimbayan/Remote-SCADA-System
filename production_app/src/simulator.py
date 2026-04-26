@@ -125,7 +125,13 @@ def battery_step(charge_power_kw, dt_hours):
     effective_power = charge_power_kw * derate
     delta_kwh = effective_power * dt_hours * eff
     new_soc = battery["soc"] + delta_kwh / battery["capacity_kwh"]
-    new_soc = max(0.01, min(0.99, new_soc))
+    
+    # Auto-refresh logic: if SOC hits ~0, simulate a cycle/refresh back to 100%
+    if new_soc <= 0.01:
+        new_soc = 0.99
+    else:
+        new_soc = min(0.99, new_soc)
+        
     battery["soc"] = new_soc
     battery["voltage"] = battery_voltage_from_soc(new_soc)
     return delta_kwh
