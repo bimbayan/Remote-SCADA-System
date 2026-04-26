@@ -311,18 +311,18 @@ if menu == "📊 Dashboard":
                 fig.update_layout(**PLOT_LAYOUT, showlegend=False, height=190,
                     annotations=[dict(text=f"<b>{p_out:.1f}</b><br>kW", font_size=22, font_color="#f0f0f5", showarrow=False)])
                 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-                st.markdown(f"<div style='text-align:center; color:#8b8b9a; font-size:12px; margin-top:-8px;'>Frequency 50.07 Hz</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='text-align:center; color:#8b8b9a; font-size:12px; margin-top:-8px; padding-bottom:15px;'>Frequency 50.07 Hz</div>", unsafe_allow_html=True)
             with c_metrics:
                 inv_running = df[df["inverter_id"].str.startswith("INV")].groupby("inverter_id").last()
                 n_run = int((inv_running["status"] == "Running").sum()) if not inv_running.empty else 0
                 st.markdown(f"""
-                <div style='font-size:13px; line-height:2;'>
-                    <div style='display:flex; justify-content:space-between;'><span style='color:#8b8b9a;'>Reactive Pwr</span><span style='color:#f0f0f5; font-family:monospace; font-weight:700;'>0.11 MVAr</span></div>
+                <div style='font-size:13px; line-height:2; padding:0 10px;'>
+                    <div style='display:flex; justify-content:space-between;'><span style='color:#8b8b9a;'>Reactive Power</span><span style='color:#f0f0f5; font-family:monospace; font-weight:700;'>0.11 MVAr</span></div>
                     <div style='display:flex; justify-content:space-between;'><span style='color:#8b8b9a;'>Power Factor</span><span style='color:#f0f0f5; font-family:monospace; font-weight:700;'>1.00</span></div>
                     <div style='display:flex; justify-content:space-between;'><span style='color:#8b8b9a;'>Voltage</span><span style='color:#f0f0f5; font-family:monospace; font-weight:700;'>112.7 kV</span></div>
                 </div>
                 <hr style='border-color:#1f1f28; margin:8px 0;'>
-                <div style='font-size:12px; line-height:1.9;'>
+                <div style='font-size:12px; line-height:1.9; padding:0 10px; padding-bottom:12px;'>
                     <div><span class='led-green'></span> POI Online</div>
                     <div><span class='led-green'></span> DataServer 2 OK</div>
                     <div><span class='led-red'></span> DataServer 1 Offline</div>
