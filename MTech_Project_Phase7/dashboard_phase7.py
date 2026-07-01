@@ -1,253 +1,169 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
+"""Remote Solar SCADA dashboard backed by a real environmental API."""
+
+from __future__ import annotations
+
+import math
 import os
+
+import pandas as pd
 import plotly.express as px
-from pandas.errors import EmptyDataError
-from datetime import datetime
+import streamlit as st
 
-#from decision_engine import generate_decisions
-
-
-# =========================================================
-# PAGE CONFIG
-# =========================================================
-st.set_page_config(
-    page_title="Remote Solar SCADA System",
-    layout="wide"
+from MTech_Project_Phase7.live_data import (
+    DEFAULT_LATITUDE,
+    DEFAULT_LONGITUDE,
+    LiveDataError,
+    build_forecast_telemetry,
+    build_live_snapshot,
+    fetch_live_environment,
 )
 
-# =========================================================
-# PATH RESOLUTION (NO GUESSWORK)
-# =========================================================
+
+st.set_page_config(page_title="Remote Solar SCADA", page_icon="☀️", layout="wide")
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-LIVE_FILE = os.path.join(BASE_DIR, "data", "live", "plant_live.csv")
 ALARM_FILE = os.path.join(BASE_DIR, "data", "logs", "alarms.csv")
-# =========================================================
-# SIDEBAR
-# =========================================================
-st.sidebar.title("SCADA Status")
-st.sidebar.markdown(f"📁 Data path:\n`{BASE_DIR}`") 
-
-# =========================================================
-# DATA LOADERS (THIS IS THE HEART)
-# =========================================================
-@st.cache_data(ttl=5)
-def load_live_data():
-    if not os.path.exists(LIVE_FILE):
-        return None
-
-    try:
-        df = pd.read_csv(LIVE_FILE)
-        if df.empty:
-            return None
-
-        df["ts"] = pd.to_datetime(df["ts"], errors="coerce")
-        df = df.dropna(subset=["ts"])
-        return df
-
-    except EmptyDataError:
-        return None
 
 
-@st.cache_data(ttl=5)
-def load_alarms():
+@st.cache_data(ttl=300, show_spinner="Calling Open-Meteo…")
+def load_api_data(latitude: float, longitude: float):
+    return fetch_live_environment(latitude, longitude)
+
+
+@st.cache_data(ttl=30)
+def load_alarms() -> pd.DataFrame:
     if not os.path.exists(ALARM_FILE):
         return pd.DataFrame()
-
     try:
-        df = pd.read_csv(ALARM_FILE)
-        df["ts"] = pd.to_datetime(df["ts"], errors="coerce")
-        return df.dropna(subset=["ts"])
-    except EmptyDataError:
+        alarms = pd.read_csv(ALARM_FILE)
+        alarms["ts"] = pd.to_datetime(alarms["ts"], errors="coerce")
+        return alarms.dropna(subset=["ts"])
+    except (pd.errors.EmptyDataError, KeyError):
         return pd.DataFrame()
 
 
-df = load_live_data()
-alarms = load_alarms()
+st.title("Remote Solar SCADA System")
+st.caption("Live environmental API • transparent PV digital twin • paginated telemetry explorer")
 
-# =========================================================
-# HEADER
-# =========================================================
-st.title("Remote SCADA System")
+st.sidebar.header("Plant connection")
+latitude = st.sidebar.number_input("Latitude", -90.0, 90.0, DEFAULT_LATITUDE, format="%.4f")
+longitude = st.sidebar.number_input("Longitude", -180.0, 180.0, DEFAULT_LONGITUDE, format="%.4f")
+if st.sidebar.button("Refresh upstream API", use_container_width=True):
+    load_api_data.clear()
 
+try:
+    api_data = load_api_data(latitude, longitude)
+    snapshot = build_live_snapshot(api_data)
+    forecast = build_forecast_telemetry(api_data)
+    upstream_ok = True
+except LiveDataError as exc:
+    upstream_ok = False
+    st.error(f"Live source unavailable: {exc}")
+    st.info("The dashboard has stopped instead of silently presenting stale data as live.")
+    st.stop()
 
-st.markdown(
-    f"🕒 **Last refresh:** `{datetime.now().strftime('%H:%M:%S')}`"
+plant = snapshot[snapshot["inverter_id"] == "PLANT_SUMMARY"].iloc[-1]
+inverters = snapshot[snapshot["inverter_id"] != "PLANT_SUMMARY"]
+
+st.sidebar.success("● API connected" if upstream_ok else "● API offline")
+st.sidebar.metric("HTTP response", f"{api_data.response_ms} ms")
+st.sidebar.caption(f"Fetched {api_data.fetched_at.strftime('%d %b %Y, %H:%M:%S %Z')}")
+st.sidebar.caption("Weather/irradiance: current model conditions or forecasts from Open-Meteo. Plant equipment: modelled.")
+st.sidebar.markdown("[Weather data by Open-Meteo.com](https://open-meteo.com/)")
+
+overview_tab, equipment_tab, explorer_tab, intelligence_tab, alarms_tab = st.tabs(
+    ["Overview", "Equipment", "API Data Explorer", "Decision Intelligence", "Alarms"]
 )
 
-if df is None:
-    st.warning("Waiting for simulator data…")
-    st.stop()
-
-# =========================================================
-# PLANT SUMMARY ROW
-# =========================================================
-plant_rows = df[df["inverter_id"] == "PLANT_SUMMARY"]
-
-if plant_rows.empty:
-    st.error("PLANT_SUMMARY row not found. Simulator issue.")
-    st.stop()
-
-plant = plant_rows.iloc[-1]
-trend_df = plant_rows.sort_values("ts")
-
-# =========================================================
-# TABS (CHROME-STYLE)
-# =========================================================
-tabs = st.tabs([
-    "Overview","Irradiance","Energy Flow","Losses","DC Health",
-    "Inverter Health","Battery","Environment","Predictive",
-    "Alarm Priority","Decision Intelligence"
-])
-
-
-# =========================================================
-# OVERVIEW
-# =========================================================
-with tabs[0]:
+with overview_tab:
+    st.subheader("Current operating picture")
     c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Modelled plant power", f"{plant['P_AC_kW']:.1f} kW")
+    c2.metric("Current API GHI", f"{plant['GHI']:.0f} W/m²")
+    c3.metric("Current API ambient", f"{plant['AmbientTemp_C']:.1f} °C")
+    c4.metric("Current API wind", f"{plant['wind_speed_m_s']:.1f} m/s")
+    c5.metric("Modelled battery SOC", f"{plant['battery_soc']:.1f}%")
 
-    c1.metric("Plant Power (kW)", f"{plant['P_AC_kW']:.1f}")
-    c2.metric("GHI (W/m²)", f"{plant['GHI']:.0f}")
-    c3.metric("Ambient Temp (°C)", f"{plant['AmbientTemp_C']:.1f}")
-    c4.metric("Total Energy (kWh)", f"{plant['Total_energy_kWh']:.2f}")
-    c5.metric("Battery SOC (%)", f"{plant['battery_soc']:.1f}")
-
-    st.subheader("Plant Output Trend")
-
-    if len(trend_df) < 2:
-        st.info("Trend building… need more samples.")
-    else:
-        fig = px.line(
-            trend_df,
-            x="ts",
-            y="P_AC_kW",
-            markers=True
-        )
-        fig.update_layout(
-            xaxis_title="Time",
-            yaxis_title="Power (kW)",
-            hovermode="x unified"
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-# =========================================================
-# IRRADIANCE
-# =========================================================
-with tabs[1]:
-    clear_sky = 1000
-    ratio = plant["GHI"] / clear_sky * 100
-
-    c1, c2, c3 = st.columns(3)
-    c1.metric("POA Irradiance (W/m²)", f"{plant['GHI']:.0f}")
-    c2.metric("GHI vs Clear Sky (%)", f"{ratio:.1f}")
-    c3.metric("Spectral Factor", "0.98")
-
-# =========================================================
-# ENERGY FLOW
-# =========================================================
-with tabs[2]:
-    c1, c2, c3, c4 = st.columns(4)
-
-    c1.metric("DC Array Power (kW)", f"{plant['P_DC_kW']:.1f}")
-    c2.metric("Inverter AC (kW)", f"{plant['P_AC_kW']:.1f}")
-    c3.metric("Station Load (kW)", "3.5")
-
-    loss = plant.get("transformer_loss_kw", 0)
-    c4.metric("Export @ POI (kW)", f"{plant['P_AC_kW'] - loss:.1f}")
-
-    pr = plant["P_AC_kW"] / max(1, plant["GHI"] / 1000 * plant["rated_kw"])
-    st.metric("Instantaneous PR", f"{pr:.2f}")
-
-# =========================================================
-# LOSSES
-# =========================================================
-with tabs[3]:
-    loss_df = pd.DataFrame({
-        "Loss Type": ["Availability", "Curtailment", "Soiling", "Clipping"],
-        "Lost kWh": np.random.uniform(1, 10, 4)
-    })
-
-    fig = px.bar(loss_df, x="Lost kWh", y="Loss Type", orientation="h")
+    chart_data = forecast.head(48)
+    fig = px.line(
+        chart_data,
+        x="time",
+        y=["Estimated_AC_kW", "GHI_W_m2"],
+        title="Next 48 hours: modelled AC power and upstream irradiance",
+    )
+    fig.update_layout(hovermode="x unified", legend_title_text="Signal")
     st.plotly_chart(fig, use_container_width=True)
+    st.info(
+        "Data lineage: Open-Meteo supplies environmental conditions. AC power is calculated "
+        "from irradiance, cell-temperature derating and 97% conversion efficiency."
+    )
 
+with equipment_tab:
+    st.subheader("Inverter digital twin")
+    equipment_view = inverters[
+        ["ts", "inverter_id", "status", "rated_kw", "P_DC_kW", "P_AC_kW", "data_class"]
+    ].copy()
+    equipment_view[["P_DC_kW", "P_AC_kW"]] = equipment_view[["P_DC_kW", "P_AC_kW"]].round(2)
+    st.dataframe(equipment_view, use_container_width=True, hide_index=True)
+    st.caption("These are deterministic model outputs, not measurements from a connected field RTU.")
 
-# DC HEALTH
+with explorer_tab:
+    st.subheader("Paginated upstream telemetry")
+    st.code(f"GET {api_data.endpoint}", language=None)
+    a, b, c = st.columns(3)
+    page_size = a.selectbox("Records per page", [10, 20, 25, 50], index=1)
+    total_records = len(forecast)
+    total_pages = max(1, math.ceil(total_records / page_size))
+    page = int(b.number_input("Page", 1, total_pages, 1, step=1))
+    b.caption(f"of {total_pages} pages")
+    c.metric("Upstream records", total_records)
 
-with tabs[4]:
-    cols = st.columns(4)
-    cols[0].metric("String Spread (%)", "6.1")
-    cols[1].metric("Max Module Temp (°C)", "57.8")
-    cols[2].metric("Insulation (MΩ)", "840")
-    cols[3].metric("AFCI Trips", "0")
+    start = (page - 1) * page_size
+    end = min(start + page_size, total_records)
+    page_df = forecast.iloc[start:end].copy()
+    numeric_cols = page_df.select_dtypes(include="number").columns
+    page_df[numeric_cols] = page_df[numeric_cols].round(2)
+    st.dataframe(page_df, use_container_width=True, hide_index=True)
+    st.caption(f"Showing records {start + 1}–{end} of {total_records} • page {page}/{total_pages}")
 
-
-# INVERTER HEALTH
-
-with tabs[5]:
-    cols = st.columns(4)
-    cols[0].metric("IGBT Temp (°C)", "71")
-    cols[1].metric("THD-V (%)", "2.0")
-    cols[2].metric("Power Factor", "0.99")
-    cols[3].metric("DC Bus Ripple (V)", "4.1")
-
-
-# BATTERY
-
-with tabs[6]:
-    cols = st.columns(4)
-    cols[0].metric("SOC (%)", f"{plant['battery_soc']:.1f}")
-    cols[1].metric("SOH (%)", "96.4")
-    cols[2].metric("Cycles", "318")
-    cols[3].metric("Cell ΔV (mV)", "17")
-
-
-# ENVIRONMENT
-
-with tabs[7]:
-    cols = st.columns(4)
-    cols[0].metric("Temp (°C)", f"{plant['AmbientTemp_C']:.1f}")
-    cols[1].metric("Wind (m/s)", "4.1")
-    cols[2].metric("Humidity (%)", "49")
-    cols[3].metric("Dust", "Moderate")
-
-# =========================================================
-# PREDICTIVE
-# =========================================================
-with tabs[8]:
-    st.metric("Next Wash", "6 days")
-    st.metric("Thermal Headroom", "13 h")
-    st.metric("Battery Life to 80% SOH", "4.1 years")
-
-# =========================================================
-# ALARMS
-# =========================================================
-with tabs[9]:
-    if alarms.empty:
-        st.success("No active alarms")
-    else:
-        alarms["RiskScore"] = np.random.uniform(1, 10, len(alarms))
-        st.dataframe(
-            alarms.sort_values("RiskScore", ascending=False).head(10),
-            use_container_width=True
+    with st.expander("API provenance and response metadata"):
+        st.json(
+            {
+                "provider": api_data.source,
+                "transport": "HTTPS / JSON",
+                "authentication": "No API key required",
+                "response_time_ms": api_data.response_ms,
+                "cache_ttl_seconds": 300,
+                "coordinates": {"latitude": latitude, "longitude": longitude},
+                "upstream_granularity": "current conditions + hourly forecast",
+            }
         )
-    st.markdown("⚠️ Alarm priority is based on a simulated risk score for demonstration purposes only.")    
 
-##
-#with tabs[10]:
-  #  st.subheader("Decision Intelligence — What to do next")
+with intelligence_tab:
+    st.subheader("Rule-based operating recommendations")
+    expected = max(1.0, plant["GHI"] / 1000.0 * plant["rated_kw"])
+    performance_ratio = plant["P_AC_kW"] / expected
+    if plant["GHI"] < 20:
+        st.success("Night/low-irradiance state: keep inverters in standby and preserve battery reserve.")
+    elif performance_ratio < 0.75:
+        st.warning("Modelled performance ratio is below 0.75; inspect temperature and conversion losses.")
+    else:
+        st.success(f"Modelled performance ratio is {performance_ratio:.2f}; no intervention indicated.")
+    if plant["battery_soc"] > 80:
+        st.info("Battery reserve is high; enable export or flexible loads if site policy permits.")
+    st.caption("Recommendations are explainable rules, not autonomous control commands.")
 
- #   decisions = generate_decisions(df_live)
-
-  #  for i, row in decisions.iterrows():
-  #      st.markdown(f"""
-  #      ### {i+1}. {row['action']}
-  #      **Why:** {row['reason']}  
-  #      **Estimated gain:** {row['estimated_gain_kw']} kW  
-  #      **Priority score:** {row['priority_score']}
-  #      """)
-
-
-#formulae logic, basic equations logic explanation in the final report 
+with alarms_tab:
+    alarms = load_alarms()
+    st.subheader("Simulator alarm history")
+    if alarms.empty:
+        st.success("No recorded simulator alarms")
+    else:
+        severity_score = {"Critical": 3, "High": 2, "Medium": 1}
+        alarms["priority"] = alarms["severity"].map(severity_score).fillna(0)
+        st.dataframe(
+            alarms.sort_values(["priority", "ts"], ascending=False).head(50),
+            use_container_width=True,
+            hide_index=True,
+        )
+    st.caption("Alarm records originate from the local simulator and are labelled separately from API data.")

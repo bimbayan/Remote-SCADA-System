@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Python
 __pycache__/
 *.py[cod]
@@ -43,3 +44,11 @@ production_app/.streamlit/secrets.toml
 # Misc
 *.log
 *.tmp
+=======
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.streamlit/secrets.toml
+.env
+
+>>>>>>> aece4c9 (feat: Open Meteo endpoint changes)
