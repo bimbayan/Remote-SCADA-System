@@ -11,6 +11,11 @@ from yaml.loader import SafeLoader
 import streamlit_authenticator as stauth
 from streamlit_autorefresh import st_autorefresh
 
+from MTech_Project_Phase7.location_service import LocationService
+from MTech_Project_Phase7.weather_service import WeatherService
+from MTech_Project_Phase7.prediction_service import PredictionService
+from MTech_Project_Phase7.recommendation_service import RecommendationService
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC_DIR = os.path.join(BASE_DIR, "src")
 if SRC_DIR not in sys.path:
@@ -194,7 +199,7 @@ st.sidebar.markdown("---")
 
 menu = st.sidebar.radio(
     "Navigation",
-    ["📊 Dashboard", "⚙️ Plant Control", "🏠 Home", "🗺️ Overview", "🏢 Substation", "🔔 Alarm", "📈 Trend", "🔌 Utilities"],
+    ["📊 Dashboard", "⚙️ Plant Control", "🏠 Home", "🗺️ Overview", "🏢 Substation", "🔔 Alarm", "📈 Trend", "🔌 Utilities", "🔮 Predictor"],
     label_visibility="collapsed")
 
 # ── Sidebar Alarm Ticker ────────────────────────────────────
@@ -1422,3 +1427,126 @@ elif menu == "🔌 Utilities":
                     <span style='color:#f0f0f5; font-weight:600; font-family:monospace;'>{val}</span>
                 </div>""", unsafe_allow_html=True)
 
+elif menu == "🔮 Predictor":
+
+    st.title("🔮 Solar Power Predictor")
+
+    st.markdown(
+        """
+        Predict the expected power generation of a solar plant
+        using live weather data for any location.
+        """
+    )
+
+    location_service = LocationService()
+    weather_service = WeatherService()
+    prediction_service = PredictionService()
+    recommendation_service = RecommendationService()
+
+    location_name = st.text_input(
+        "Location",
+        placeholder="Example: Kolkata, Delhi, IIT Kharagpur, Chennai..."
+    )
+
+    plant_capacity = st.number_input(
+        "Plant Capacity (kW)",
+        min_value=1.0,
+        value=500.0,
+        step=10.0,
+    )
+
+    if st.button("Predict Power"):
+
+        if not location_name.strip():
+            st.warning("Please enter a location.")
+            st.stop()
+
+        with st.spinner("Fetching weather..."):
+
+            location = location_service.resolve(location_name)
+
+            weather = weather_service.get_weather(
+                latitude=location.latitude,
+                longitude=location.longitude,
+            )
+
+            prediction = prediction_service.predict(
+                weather=weather,
+                plant_capacity_kw=plant_capacity,
+            )
+
+            recommendations = recommendation_service.generate(
+                prediction,
+                weather,
+            )
+
+        st.success(f"Location: {location.display_name}")
+
+        c1, c2, c3, c4 = st.columns(4)
+
+        c1.metric(
+            "Irradiance",
+            f"{weather.ghi_w_m2:.0f} W/m²",
+        )
+
+        c2.metric(
+            "Temperature",
+            f"{weather.temperature_c:.1f} °C",
+        )
+
+        c3.metric(
+            "Predicted AC Power",
+            f"{prediction.ac_power_kw:.2f} kW",
+        )
+
+        c4.metric(
+            "Performance Ratio",
+            f"{prediction.performance_ratio:.3f}",
+        )
+
+        st.subheader("Weather Conditions")
+
+        st.dataframe(
+            {
+                "Parameter": [
+                    "Relative Humidity",
+                    "Cloud Cover",
+                    "Wind Speed",
+                ],
+                "Value": [
+                    f"{weather.relative_humidity_pct} %",
+                    f"{weather.cloud_cover_pct} %",
+                    f"{weather.wind_speed_m_s} m/s",
+                ],
+            },
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        st.subheader("Prediction")
+
+        st.dataframe(
+            {
+                "Metric": [
+                    "Predicted DC Power",
+                    "Predicted AC Power",
+                    "Estimated Hourly Energy",
+                    "Performance Ratio",
+                    "Inverter Efficiency",
+                ],
+                "Value": [
+                    f"{prediction.dc_power_kw:.2f} kW",
+                    f"{prediction.ac_power_kw:.2f} kW",
+                    f"{prediction.estimated_hourly_energy_kwh:.2f} kWh",
+                    f"{prediction.performance_ratio:.3f}",
+                    f"{prediction.inverter_efficiency_pct:.1f} %",
+                ],
+            },
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        st.subheader("Recommendations")
+
+        for recommendation in recommendations:
+            st.info(recommendation)
