@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Python
 __pycache__/
 *.py[cod]
@@ -17,38 +16,30 @@ venv/
 env/
 .env
 
-# Runtime data (SQLite, live CSV, logs) — do NOT commit
+# Runtime data
 production_app/data/scada.db
 production_app/data/scada.db-shm
 production_app/data/scada.db-wal
 production_app/data/live/
 production_app/data/logs/
 
-# Streamlit secrets (never commit credentials)
+# Streamlit
 .streamlit/secrets.toml
 production_app/.streamlit/secrets.toml
 
-# macOS
-.DS_Store
-**/.DS_Store
-
-# IDEs
+# IDE
 .vscode/
 .idea/
-*.swp
-*.swo
 
 # Jupyter
 .ipynb_checkpoints/
 
+# Cache
+.pytest_cache/
+
+# macOS
+.DS_Store
+
 # Misc
 *.log
 *.tmp
-=======
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.streamlit/secrets.toml
-.env
-
->>>>>>> aece4c9 (feat: Open Meteo endpoint changes)
