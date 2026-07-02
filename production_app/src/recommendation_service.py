@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from MTech_Project_Phase8.decision_engine import generate_decisions
+from decision_engine import generate_decisions
 
 from models import (
     PredictionResult,
