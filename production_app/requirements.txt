@@ -5,3 +5,4 @@ numpy==1.26.4
 SQLAlchemy==2.0.31
 streamlit-autorefresh==1.0.1
 streamlit-authenticator==0.4.2
+pvlib>=0.10.0
