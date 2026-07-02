@@ -147,6 +147,5 @@ class WeatherService:
             return response.json()
 
         except requests.RequestException as exc:
-            raise WeatherServiceError(
-                "Unable to retrieve weather information."
-            ) from exc
+
+            raise
