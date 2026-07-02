@@ -22,6 +22,10 @@ class LocationResult:
 
 @dataclass(frozen=True, slots=True)
 class WeatherSnapshot:
+    """
+    Represents the environmental conditions at a given instant.
+    """
+
     timestamp: str
 
     ghi_w_m2: float
@@ -34,14 +38,13 @@ class WeatherSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class PredictionResult:
-    """
-    Represents the output of the PV prediction engine.
-    """
-
     dc_power_kw: float
     ac_power_kw: float
 
-    estimated_energy_kwh: float
+    estimated_hourly_energy_kwh: float
 
+    final_yield: float
+    reference_yield: float
     performance_ratio: float
-    plant_efficiency: float
+
+    inverter_efficiency_pct: float

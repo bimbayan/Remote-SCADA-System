@@ -11,10 +11,10 @@ from yaml.loader import SafeLoader
 import streamlit_authenticator as stauth
 from streamlit_autorefresh import st_autorefresh
 
-from MTech_Project_Phase7.location_service import LocationService
-from MTech_Project_Phase7.weather_service import WeatherService
-from MTech_Project_Phase7.prediction_service import PredictionService
-from MTech_Project_Phase7.recommendation_service import RecommendationService
+from location_service import LocationService
+from weather_service import WeatherService
+from prediction_service import PredictionService
+from recommendation_service import RecommendationService
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC_DIR = os.path.join(BASE_DIR, "src")
@@ -1465,10 +1465,11 @@ elif menu == "🔮 Predictor":
 
             location = location_service.resolve(location_name)
 
-            weather = weather_service.get_weather(
+            weather = weather_service.get_current_weather(
+                
                 latitude=location.latitude,
                 longitude=location.longitude,
-            )
+           )
 
             prediction = prediction_service.predict(
                 weather=weather,
@@ -1476,8 +1477,10 @@ elif menu == "🔮 Predictor":
             )
 
             recommendations = recommendation_service.generate(
+                
                 prediction,
                 weather,
+                plant_capacity,
             )
 
         st.success(f"Location: {location.display_name}")
@@ -1547,6 +1550,9 @@ elif menu == "🔮 Predictor":
         )
 
         st.subheader("Recommendations")
-
-        for recommendation in recommendations:
-            st.info(recommendation)
+        st.dataframe(
+            
+            recommendations,
+            use_container_width=True,
+            hide_index=True,
+        )
