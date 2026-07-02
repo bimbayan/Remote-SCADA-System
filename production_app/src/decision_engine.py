@@ -1,4 +1,3 @@
-# decision_engine.py
 import pandas as pd
 import numpy as np
 
@@ -56,10 +55,15 @@ def generate_decisions(df_live):
     # 3. Inverter availability
     # -------------------------------
     inv = df_live[df_live["inverter_id"] != "PLANT_SUMMARY"]
-    down = inv[inv["status"] != "Running"]
+
+    # Safety: status column may not exist yet
+    if "status" in inv.columns:
+        down = inv[inv["status"] != "Running"]
+    else:
+        down = pd.DataFrame()
 
     if not down.empty:
-        lost_kw = down["rated_kw"].sum()
+        lost_kw = down["rated_kw"].sum() if "rated_kw" in down.columns else 0.0
         decisions.append({
             "action": "Dispatch O&M to restore inverter(s)",
             "reason": f"{len(down)} inverter(s) unavailable",
