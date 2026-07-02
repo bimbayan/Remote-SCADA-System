@@ -1443,6 +1443,18 @@ elif menu == "🔮 Predictor":
     prediction_service = PredictionService()
     recommendation_service = RecommendationService()
 
+    @st.cache_data(ttl=300)
+    def get_weather_cached(
+        
+        latitude: float,
+        longitude: float,
+):
+        return weather_service.get_current_weather(
+            
+            latitude=latitude,
+            longitude=longitude,
+    )
+
     location_name = st.text_input(
         "Location",
         placeholder="Example: Kolkata, Delhi, IIT Kharagpur, Chennai..."
@@ -1465,10 +1477,10 @@ elif menu == "🔮 Predictor":
 
             location = location_service.resolve(location_name)
 
-            weather = weather_service.get_current_weather(
+            weather = get_weather_cached(
                 
-                latitude=location.latitude,
-                longitude=location.longitude,
+                location.latitude,
+                location.longitude,
            )
 
             prediction = prediction_service.predict(
