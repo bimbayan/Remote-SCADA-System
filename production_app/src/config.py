@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from enum import StrEnum
+from enum import Enum
 
 # ============================================================
 # API Endpoints
@@ -33,7 +33,7 @@ USER_AGENT = "Remote-SCADA-MTech/1.0"
 # Open-Meteo Weather Fields
 # ============================================================
 
-class WeatherField(StrEnum):
+class WeatherField(str, Enum):
     TEMPERATURE = "temperature_2m"
     HUMIDITY = "relative_humidity_2m"
     CLOUD_COVER = "cloud_cover"
@@ -45,7 +45,7 @@ class WeatherField(StrEnum):
 # Equipment Status
 # ============================================================
 
-class InverterStatus(StrEnum):
+class InverterStatus(str, Enum):
     RUNNING = "Running"
     STANDBY = "Standby"
 
@@ -53,6 +53,6 @@ class InverterStatus(StrEnum):
 # Data Classification
 # ============================================================
 
-class DataClassification(StrEnum):
+class DataClassification(str, Enum):
     MODELLED_EQUIPMENT = "MODELLED_EQUIPMENT"
     MODELLED_FROM_LIVE_WEATHER = "MODELLED_FROM_LIVE_WEATHER"

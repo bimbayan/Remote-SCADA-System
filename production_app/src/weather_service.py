@@ -51,12 +51,12 @@ class WeatherService:
 
         return WeatherSnapshot(
             timestamp=current["time"],
-            ghi_w_m2=float(current.get(WeatherField.GHI, 0)),
-            temperature_c=float(current.get(WeatherField.TEMPERATURE, 0)),
-            humidity_pct=float(current.get(WeatherField.HUMIDITY, 0)),
-            wind_speed_m_s=float(current.get(WeatherField.WIND_SPEED, 0)),
-            cloud_cover_pct=float(current.get(WeatherField.CLOUD_COVER, 0)),
-            is_day=bool(current.get(WeatherField.IS_DAY, 1)),
+            ghi_w_m2=float(current.get(WeatherField.GHI.value, 0)),
+            temperature_c=float(current.get(WeatherField.TEMPERATURE.value, 0)),
+            humidity_pct=float(current.get(WeatherField.HUMIDITY.value, 0)),
+            wind_speed_m_s=float(current.get(WeatherField.WIND_SPEED.value, 0)),
+            cloud_cover_pct=float(current.get(WeatherField.CLOUD_COVER.value, 0)),
+            is_day=bool(current.get(WeatherField.IS_DAY.value, 1)),
         )
 
     def get_hourly_forecast(
@@ -82,11 +82,11 @@ class WeatherService:
             snapshots.append(
                 WeatherSnapshot(
                     timestamp=hourly["time"][index],
-                    ghi_w_m2=float(hourly[WeatherField.GHI][index]),
-                    temperature_c=float(hourly[WeatherField.TEMPERATURE][index]),
-                    humidity_pct=float(hourly[WeatherField.HUMIDITY][index]),
-                    wind_speed_m_s=float(hourly[WeatherField.WIND_SPEED][index]),
-                    cloud_cover_pct=float(hourly[WeatherField.CLOUD_COVER][index]),
+                    ghi_w_m2=float(hourly[WeatherField.GHI.value][index]),
+                    temperature_c=float(hourly[WeatherField.TEMPERATURE.value][index]),
+                    humidity_pct=float(hourly[WeatherField.HUMIDITY.value][index]),
+                    wind_speed_m_s=float(hourly[WeatherField.WIND_SPEED.value][index]),
+                    cloud_cover_pct=float(hourly[WeatherField.CLOUD_COVER.value][index]),
                     is_day=True,
                 )
             )
@@ -111,7 +111,8 @@ class WeatherService:
 
         if current:
             params["current"] = ",".join(
-                [
+                field.value
+                for field in [
                     WeatherField.TEMPERATURE,
                     WeatherField.HUMIDITY,
                     WeatherField.CLOUD_COVER,
@@ -124,7 +125,8 @@ class WeatherService:
         if hourly:
             params["forecast_days"] = 7
             params["hourly"] = ",".join(
-                [
+                field.value
+                for field in [
                     WeatherField.TEMPERATURE,
                     WeatherField.HUMIDITY,
                     WeatherField.CLOUD_COVER,
