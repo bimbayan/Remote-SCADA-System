@@ -1,58 +1,42 @@
-from __future__ import annotations
+"""Application configuration."""
 
+import os
 from enum import Enum
+from pathlib import Path
 
-# ============================================================
-# API Endpoints
-# ============================================================
+# ── Paths ──────────────────────────────────────────────────────
+BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / "data"
+LIVE_DB = DATA_DIR / "live" / "scada_live.db"
+LOG_DB = DATA_DIR / "logs" / "scada_logs.db"
 
-OPEN_METEO_API_URL = "https://api.open-meteo.com/v1/forecast"
+# ── Simulator ────────────────────────────────────────────────────
+SIM_INTERVAL_SECONDS = 5
+SIM_PLANT_CAPACITY_KW = 1000.0
 
-PVGIS_API_URL = "https://re.jrc.ec.europa.eu/api/v5_3/seriescalc"
+# ── Database ─────────────────────────────────────────────────────
+DB_TIMEOUT_SECONDS = 10
 
+# ── HTTP ─────────────────────────────────────────────────────────
+REQUEST_TIMEOUT_SECONDS = 15
+USER_AGENT = (
+    "RemoteSCADA/1.0 (https://github.com/bimbayan/Remote-SCADA-System)"
+)
+
+# ── Time ─────────────────────────────────────────────────────────
+TIMEZONE = "UTC"
+
+# ── OpenWeather (for temp/humidity/wind/clouds) ──────────────────
+OPENWEATHER_API_URL = "https://api.openweathermap.org/data/2.5/weather"
+OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY", "")
+
+# ── Nominatim (geocoding — free, no key needed) ──────────────────
 NOMINATIM_API_URL = "https://nominatim.openstreetmap.org/search"
 
-# ============================================================
-# Application Configuration
-# ============================================================
-
-DEFAULT_LATITUDE = 23.0
-DEFAULT_LONGITUDE = 88.5
-
-DEFAULT_PLANT_CAPACITY_KW = 500.0
-DEFAULT_INVERTER_COUNT = 5
-
-REQUEST_TIMEOUT_SECONDS = 15
-CACHE_TTL_SECONDS = 300
-
-TIMEZONE = "Asia/Kolkata"
-
-USER_AGENT = "Remote-SCADA-MTech/1.0"
-
-# ============================================================
-# Open-Meteo Weather Fields
-# ============================================================
-
-class WeatherField(str, Enum):
-    TEMPERATURE = "temperature_2m"
-    HUMIDITY = "relative_humidity_2m"
-    CLOUD_COVER = "cloud_cover"
-    WIND_SPEED = "wind_speed_10m"
-    GHI = "shortwave_radiation"
-    IS_DAY = "is_day"
-
-# ============================================================
-# Equipment Status
-# ============================================================
-
-class InverterStatus(str, Enum):
-    RUNNING = "Running"
-    STANDBY = "Standby"
-
-# ============================================================
-# Data Classification
-# ============================================================
-
-class DataClassification(str, Enum):
-    MODELLED_EQUIPMENT = "MODELLED_EQUIPMENT"
-    MODELLED_FROM_LIVE_WEATHER = "MODELLED_FROM_LIVE_WEATHER"
+# ── Weather field mapping ────────────────────────────────────────
+class WeatherField(Enum):
+    TEMPERATURE = "temp"
+    HUMIDITY = "humidity"
+    WIND_SPEED = "speed"
+    CLOUD_COVER = "all"
+    IS_DAY = "icon"
