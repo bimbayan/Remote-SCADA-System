@@ -10,6 +10,7 @@ from config import (
     USER_AGENT,
 )
 
+from models import LocationResult
 
 class LocationLookupError(RuntimeError):
     """Raised when a location cannot be resolved."""
