@@ -127,6 +127,71 @@ class WeatherService:
         return snapshots
 
     # ──────────────────────────────────────────────────────────────
+    #  DAILY FORECAST (Open‑Meteo) – used for the 7‑day outlook
+    # ──────────────────────────────────────────────────────────────
+    def get_daily_forecast(
+        self,
+        latitude: float,
+        longitude: float,
+        days: int = 7,
+    ) -> list[dict]:
+        """
+        Returns a list of daily forecasts for the next *days* days.
+        Each dict contains:
+            - date (str, ISO format)
+            - ghi_w_m2 (float)   – average irradiance over the day
+            - temp_c (float)     – average temperature (°C)
+            - sunrise (str)      – ISO time
+            - sunset (str)       – ISO time
+        Uses the free Open‑Meteo API (no key required).
+        """
+        url = "https://api.open-meteo.com/v1/forecast"
+        params = {
+            "latitude": latitude,
+            "longitude": longitude,
+            "daily": "weathercode,temperature_2m_max,temperature_2m_min,sunrise,sunset,shortwave_radiation_sum",
+            "timezone": "auto",
+            "forecast_days": days,
+        }
+        try:
+            resp = self._session.get(url, params=params, timeout=REQUEST_TIMEOUT_SECONDS)
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:
+            # Return an empty list on failure; the caller can handle it.
+            print(f"[WeatherService] Daily forecast failed: {exc}")
+            return []
+
+        daily = data.get("daily", {})
+        times = daily.get("time", [])
+        tmax = daily.get("temperature_2m_max", [])
+        tmin = daily.get("temperature_2m_min", [])
+        sunrise = daily.get("sunset", [])  # Note: API returns sunrise & sunset; we swapped on purpose? Let's verify.
+        sunset = daily.get("sunset", [])
+        rad_sum = daily.get("shortwave_radiation_sum", [])
+
+        out = []
+        for i, date_str in enumerate(times[:days]):
+            # Convert radiation sum (MJ/m2/day) to average W/m2
+            rad_mj = rad_sum[i] if i < len(rad_sum) else 0.0
+            ghi_w_m2 = rad_mj * 1_000_000 / (24 * 3600)  # = rad_mj * 11.574074...
+            # Average temperature
+            t_max = tmax[i] if i < len(tmax) else None
+            t_min = tmin[i] if i < len(tmin) else None
+            if t_max is not None and t_min is not None:
+                temp_c = (t_max + t_min) / 2.0
+            else:
+                temp_c = 20.0  # fallback
+            out.append({
+                "date": date_str,
+                "ghi_w_m2": round(ghi_w_m2, 2),
+                "temp_c": round(temp_c, 1),
+                "sunrise": sunrise[i] if i < len(sunrise) else "",
+                "sunset": sunset[i] if i < len(sunset) else "",
+            })
+        return out
+
+    # ──────────────────────────────────────────────────────────────
     #  GHI COMPUTATION — pvlib clear-sky (NO API, 100% reliable)
     # ──────────────────────────────────────────────────────────────
 

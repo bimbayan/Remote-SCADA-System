@@ -5,7 +5,7 @@ import os
 import sys
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime
+from datetime import datetime, timedelta
 import yaml
 from yaml.loader import SafeLoader
 import streamlit_authenticator as stauth
@@ -15,6 +15,7 @@ from location_service import LocationService
 from weather_service import WeatherService
 from prediction_service import PredictionService
 from recommendation_service import RecommendationService
+from models import WeatherSnapshot
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC_DIR = os.path.join(BASE_DIR, "src")
@@ -1596,10 +1597,55 @@ elif menu == "🔮 Predictor":
             hide_index=True,
         )
 
-        st.subheader("Recommendations")
-        st.dataframe(
 
-            recommendations,
-            use_container_width=True,
-            hide_index=True,
-        )
+        # 7-DAY FORECAST (Open-Meteo)
+        if st.session_state.prediction_results is not None:
+            res = st.session_state.prediction_results
+            loc = res["location"]
+            plant_cap = plant_capacity
+            try:
+                forecast = weather_service.get_daily_forecast(
+                    latitude=loc.latitude,
+                    longitude=loc.longitude,
+                    days=7,
+                )
+            except Exception as e:
+                st.warning(f"Could not retrieve forecast: {e}")
+                forecast = []
+
+            if forecast:
+                seven_day = []
+                for day in forecast:
+                    pseudo_weather = WeatherSnapshot(
+                        timestamp=datetime.now().isoformat(),
+                        ghi_w_m2=day["ghi_w_m2"],
+                        temperature_c=day["temperature_c"],
+                        humidity_pct=50.0,
+                        wind_speed_m_s=3.0,
+                        cloud_cover_pct=50.0,
+                        is_day=True,
+                    )
+                    pred = prediction_service.predict(pseudo_weather, plant_cap)
+                    seven_day.append({
+                        "date": day["date"].strftime("%a %b %d"),
+                        "ac_power_kw": round(pred.ac_power_kw, 2),
+                        "daily_energy_kwh": round(pred.ac_power_kw * 24, 1),
+                        "performance_ratio": round(pred.performance_ratio, 3),
+                    })
+
+                st.subheader("📅 7-Day Forecast (based on Open-Meteo)")
+                df_7day = pd.DataFrame(seven_day)
+                st.dataframe(
+                    df_7day,
+                    hide_index=True,
+                    column_config={
+                        "date": st.column_config.TextColumn("Day"),
+                        "ac_power_kw": st.column_config.NumberColumn("AC Power (kW)", format="%.2f"),
+                        "daily_energy_kwh": st.column_config.NumberColumn("Daily Energy (kWh)", format="%.1f"),
+                        "performance_ratio": st.column_config.NumberColumn("PR", format=".3f"),
+                    },
+                )
+                st.caption(
+                    "Assumes constant irradiance/temperature over each 24‑h period; values are illustrative only."
+                )
+
