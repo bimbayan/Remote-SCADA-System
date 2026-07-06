@@ -1467,18 +1467,35 @@ elif menu == "🔮 Predictor":
         step=10.0,
     )
 
-    if st.button("Predict Power"):
+    # Initialize session state for prediction results if not present
+    if 'prediction_results' not in st.session_state:
+        st.session_state.prediction_results = None
+    if 'prediction_location' not in st.session_state:
+        st.session_state.prediction_location = ""
+    if 'prediction_capacity' not in st.session_state:
+        st.session_state.prediction_capacity = 500.0
 
+    # Check if we need to compute a new prediction
+    compute_new_prediction = False
+    if st.button("Predict Power"):
         if not location_name.strip():
             st.warning("Please enter a location.")
             st.stop()
+        compute_new_prediction = True
 
-        with st.spinner("Fetching weather..."):
+    # Also compute if location or capacity changed from previous prediction
+    if (st.session_state.prediction_results is not None and
+        (st.session_state.prediction_location != location_name.strip() or
+         st.session_state.prediction_capacity != plant_capacity)):
+        compute_new_prediction = True
 
-            location = location_service.resolve(location_name)
+    if compute_new_prediction and location_name.strip():
+        with st.spinner("Fetching weather and computing prediction..."):
+
+            location = location_service.resolve(location_name.strip())
 
             weather = get_weather_cached(
-                
+
                 location.latitude,
                 location.longitude,
            )
@@ -1489,11 +1506,29 @@ elif menu == "🔮 Predictor":
             )
 
             recommendations = recommendation_service.generate(
-                
+
                 prediction,
                 weather,
                 plant_capacity,
             )
+
+            # Store results in session state
+            st.session_state.prediction_results = {
+                'location': location,
+                'weather': weather,
+                'prediction': prediction,
+                'recommendations': recommendations
+            }
+            st.session_state.prediction_location = location_name.strip()
+            st.session_state.prediction_capacity = plant_capacity
+
+    # Display results if available in session state
+    if st.session_state.prediction_results is not None:
+        result = st.session_state.prediction_results
+        location = result['location']
+        weather = result['weather']
+        prediction = result['prediction']
+        recommendations = result['recommendations']
 
         st.success(f"Location: {location.display_name}")
 
@@ -1563,7 +1598,7 @@ elif menu == "🔮 Predictor":
 
         st.subheader("Recommendations")
         st.dataframe(
-            
+
             recommendations,
             use_container_width=True,
             hide_index=True,
