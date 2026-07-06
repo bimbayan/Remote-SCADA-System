@@ -1529,7 +1529,7 @@ elif menu == "🔮 Predictor":
                     "Wind Speed",
                 ],
                 "Value": [
-                    f"{weather.relative_humidity_pct} %",
+                    f"{weather.humidity_pct} %",
                     f"{weather.cloud_cover_pct} %",
                     f"{weather.wind_speed_m_s} m/s",
                 ],
