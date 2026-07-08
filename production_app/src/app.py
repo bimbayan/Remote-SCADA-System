@@ -462,6 +462,105 @@ if menu == "📊 Dashboard":
             </div>
             """, unsafe_allow_html=True)
 
+        # ====================== FORECAST SECTION ======================
+        st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
+        f1, f2 = st.columns([1, 1])
+
+        # Determine location for forecast (use last prediction if available, else default)
+        if 'prediction_results' in st.session_state and st.session_state.prediction_results is not None:
+            loc = st.session_state.prediction_results['location']
+            lat = loc.latitude
+            lon = loc.longitude
+        else:
+            # Default to Kolkata, India
+            lat = 22.5726
+            lon = 88.3639
+
+        weather_service = WeatherService()
+        prediction_service = PredictionService()
+        plant_cap = plant['rated_kw']
+
+        with f1:
+            with st.container(border=True):
+                st.markdown('<div class="panel-title">⏰ 24‑Hour Forecast</div>', unsafe_allow_html=True)
+                try:
+                    hourly = weather_service.get_hourly_forecast(latitude=lat, longitude=lon)
+                except Exception as e:
+                    st.warning(f"Could not retrieve hourly forecast: {e}")
+                    hourly = []
+
+                if hourly:
+                    hourly_rows = []
+                    for hour in hourly:
+                        # Create a pseudo WeatherSnapshot for prediction
+                        pseudo_weather = WeatherSnapshot(
+                            timestamp=hour.timestamp,
+                            ghi_w_m2=hour.ghi_w_m2,
+                            temperature_c=hour.temperature_c,
+                            humidity_pct=50.0,
+                            wind_speed_m_s=3.0,
+                            cloud_cover_pct=50.0,
+                            is_day=hour.is_day,
+                        )
+                        pred = prediction_service.predict(pseudo_weather, plant_cap)
+                        hourly_rows.append({
+                            "time": hour.timestamp.strftime("%H:%M"),
+                            "ac_power_kw": round(pred.ac_power_kw, 2),
+                        })
+                    df_hourly = pd.DataFrame(hourly_rows)
+                    st.dataframe(
+                        df_hourly,
+                        hide_index=True,
+                        column_config={
+                            "time": st.column_config.TextColumn("Time"),
+                            "ac_power_kw": st.column_config.NumberColumn("AC Power (kW)", format="%.2f"),
+                        },
+                    )
+                else:
+                    st.info("No hourly forecast data available.")
+
+        with f2:
+            with st.container(border=True):
+                st.markdown('<div class="panel-title">📅 7‑Day Forecast</div>', unsafe_allow_html=True)
+                try:
+                    daily = weather_service.get_daily_forecast(latitude=lat, longitude=lon, days=7)
+                except Exception as e:
+                    st.warning(f"Could not retrieve daily forecast: {e}")
+                    daily = []
+
+                if daily:
+                    daily_rows = []
+                    for day in daily:
+                        pseudo_weather = WeatherSnapshot(
+                            timestamp=datetime.now().isoformat(),
+                            ghi_w_m2=day["ghi_w_m2"],
+                            temperature_c=day["temp_c"],
+                            humidity_pct=50.0,
+                            wind_speed_m_s=3.0,
+                            cloud_cover_pct=50.0,
+                            is_day=True,
+                        )
+                        pred = prediction_service.predict(pseudo_weather, plant_cap)
+                        daily_rows.append({
+                            "date": day["date"].strftime("%a %b %d"),
+                            "ac_power_kw": round(pred.ac_power_kw, 2),
+                            "daily_energy_kwh": round(pred.ac_power_kw * 24, 1),
+                            "performance_ratio": round(pred.performance_ratio, 3),
+                        })
+                    df_daily = pd.DataFrame(daily_rows)
+                    st.dataframe(
+                        df_daily,
+                        hide_index=True,
+                        column_config={
+                            "date": st.column_config.TextColumn("Day"),
+                            "ac_power_kw": st.column_config.NumberColumn("AC Power (kW)", format="%.2f"),
+                            "daily_energy_kwh": st.column_config.NumberColumn("Daily Energy (kWh)", format="%.1f"),
+                            "performance_ratio": st.column_config.NumberColumn("PR", format=".3f"),
+                        },
+                    )
+                else:
+                    st.info("No daily forecast data available.")
+
 elif menu == "⚙️ Plant Control":
     st.markdown("""
         <div style="background-color:#141419; padding:10px 20px; border-radius:6px; display:flex; justify-content:space-between; align-items:center; border: 1px solid #1f1f28; margin-bottom:15px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">

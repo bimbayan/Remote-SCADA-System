@@ -166,8 +166,8 @@ class WeatherService:
         times = daily.get("time", [])
         tmax = daily.get("temperature_2m_max", [])
         tmin = daily.get("temperature_2m_min", [])
-        sunrise = daily.get("sunset", [])  # Note: API returns sunrise & sunset; we swapped on purpose? Let's verify.
-        sunset = daily.get("sunset", [])
+        sunrise = daily.get("sunrise", [])   # Fixed: was sunset
+        sunset = daily.get("sunset", [])     # Fixed: was sunset
         rad_sum = daily.get("shortwave_radiation_sum", [])
 
         out = []
@@ -182,6 +182,7 @@ class WeatherService:
                 temp_c = (t_max + t_min) / 2.0
             else:
                 temp_c = 20.0  # fallback
+
             out.append({
                 "date": date_str,
                 "ghi_w_m2": round(ghi_w_m2, 2),
