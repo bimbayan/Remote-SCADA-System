@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { Panel, KpiCard } from '../../components/scada/Atoms';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Button } from '../../components/ui/button';
 import { Slider } from '../../components/ui/slider';
-import { MapPin, Sun, Cloud, Zap, Battery, Loader2, AlertCircle, Search, Wind, Thermometer } from 'lucide-react';
+import { MapPin, Sun, Cloud, Zap, Battery, Loader2, AlertCircle, Search } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, ComposedChart } from 'recharts';
 import { toast } from 'sonner';
 import { geocode, getForecast } from '../../lib/api';
@@ -14,67 +14,35 @@ const grid = '#1f2937';
 
 export default function Predictor() {
   const [query, setQuery] = useState('');
-  const [suggestions, setSuggestions] = useState([]);
-  const [searching, setSearching] = useState(false);
-  const [showSug, setShowSug] = useState(false);
-  const [selected, setSelected] = useState(null); // { name, country, admin1, latitude, longitude }
   const [size, setSize] = useState([500]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
+  const [matched, setMatched] = useState(null);
   const [error, setError] = useState(null);
-  const debRef = useRef(null);
-  const boxRef = useRef(null);
-
-  // Debounced geocoding
-  useEffect(() => {
-    if (!query || query.length < 2) {
-      setSuggestions([]);
-      return;
-    }
-    if (debRef.current) clearTimeout(debRef.current);
-    debRef.current = setTimeout(async () => {
-      try {
-        setSearching(true);
-        const results = await geocode(query, 8);
-        setSuggestions(results);
-        setShowSug(true);
-      } catch (e) {
-        setSuggestions([]);
-      } finally {
-        setSearching(false);
-      }
-    }, 350);
-    return () => debRef.current && clearTimeout(debRef.current);
-  }, [query]);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    const onClick = (e) => {
-      if (boxRef.current && !boxRef.current.contains(e.target)) setShowSug(false);
-    };
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, []);
-
-  const pick = (item) => {
-    setSelected(item);
-    setQuery(formatLocation(item));
-    setShowSug(false);
-    setResult(null);
-  };
 
   const run = async () => {
-    if (!selected) {
-      toast.error('Please select a location from the list first');
+    const q = query.trim();
+    if (q.length < 2) {
+      toast.error('Please enter a location (at least 2 characters)');
       return;
     }
     setLoading(true);
     setError(null);
     setResult(null);
+    setMatched(null);
     try {
-      const data = await getForecast(selected.latitude, selected.longitude, size[0], 48);
+      const results = await geocode(q, 1);
+      if (!results || results.length === 0) {
+        setError(`No place found matching “${q}”. Try a nearby larger city or a different spelling.`);
+        toast.error('Location not found');
+        setLoading(false);
+        return;
+      }
+      const hit = results[0];
+      setMatched(hit);
+      const data = await getForecast(hit.latitude, hit.longitude, size[0], 48);
       setResult(data);
-      toast.success(`Forecast generated for ${selected.name}`, {
+      toast.success(`Forecast generated for ${q}`, {
         description: `≈ ${data.totals.energy_kwh.toFixed(0)} kWh over next ${data.hours}h · peak ${data.totals.peak_kw.toFixed(1)} kW`,
       });
     } catch (e) {
@@ -86,6 +54,10 @@ export default function Predictor() {
     }
   };
 
+  const onKey = (e) => {
+    if (e.key === 'Enter') run();
+  };
+
   return (
     <div className="space-y-4">
       <div className="panel p-5">
@@ -95,7 +67,7 @@ export default function Predictor() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-xl font-semibold text-slate-50">Location-aware yield predictor</div>
-            <div className="text-sm text-slate-400 mt-1">Search any city on Earth. We call the live Open-Meteo forecast API and apply the transparent PV model (cell-temperature derating + 97% conversion) to estimate expected AC power for the next 48 hours.</div>
+            <div className="text-sm text-slate-400 mt-1">Type any location on Earth and press Predict. We call the live Open-Meteo forecast API and apply the transparent PV model (cell-temperature derating + 97% conversion) to estimate expected AC power for the next 48 hours.</div>
           </div>
         </div>
       </div>
@@ -103,44 +75,19 @@ export default function Predictor() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Panel title="Site inputs" className="lg:col-span-1">
           <div className="space-y-4">
-            <div ref={boxRef} className="relative">
+            <div>
               <Label className="text-slate-400 text-xs">Location</Label>
               <div className="relative mt-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                 <Input
                   value={query}
-                  onChange={(e) => { setQuery(e.target.value); setSelected(null); }}
-                  onFocus={() => suggestions.length > 0 && setShowSug(true)}
-                  placeholder="Search any city on Earth…"
-                  className="pl-9 pr-9 bg-[#0a0a0f] border-slate-700"
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={onKey}
+                  placeholder="Any city, town or place…"
+                  className="pl-9 bg-[#0a0a0f] border-slate-700"
                 />
-                {searching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 animate-spin" />}
               </div>
-              {showSug && suggestions.length > 0 && (
-                <div className="absolute z-30 mt-1 w-full max-h-72 overflow-y-auto panel border border-slate-700">
-                  {suggestions.map((s, i) => (
-                    <button
-                      key={`${s.name}-${s.latitude}-${s.longitude}-${i}`}
-                      onClick={() => pick(s)}
-                      className="w-full text-left px-3 py-2 hover:bg-slate-800/60 border-b border-[#1f1f27] last:border-b-0 transition-colors"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <div className="text-sm text-slate-100">{s.name}</div>
-                          <div className="text-[10px] text-slate-500">{[s.admin1, s.country].filter(Boolean).join(', ')}</div>
-                        </div>
-                        <div className="font-mono text-[10px] text-slate-500">{s.latitude.toFixed(2)}, {s.longitude.toFixed(2)}</div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {selected && (
-                <div className="mt-2 flex items-center gap-2 text-[10px] font-mono text-slate-500">
-                  <MapPin className="w-3 h-3" />
-                  <span>Selected: {selected.latitude.toFixed(4)}°, {selected.longitude.toFixed(4)}° · {selected.timezone || 'auto'}</span>
-                </div>
-              )}
+              <div className="mt-1 text-[10px] text-slate-500">Press Enter or click Predict. We use the closest known city if the exact place isn't in the map database.</div>
             </div>
 
             <div>
@@ -152,12 +99,20 @@ export default function Predictor() {
               <div className="flex justify-between text-[10px] font-mono text-slate-500 mt-1"><span>5 kW</span><span>2 MW</span></div>
             </div>
 
-            <Button onClick={run} disabled={loading || !selected} className="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
+            <Button onClick={run} disabled={loading || query.trim().length < 2} className="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
               {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Calling Open-Meteo…</> : <><Zap className="w-4 h-4 mr-2" /> Predict yield</>}
             </Button>
 
+            {matched && (
+              <div className="panel p-3 border border-cyan-500/20 bg-cyan-500/[0.03]">
+                <div className="text-[10px] font-mono text-slate-500 uppercase mb-1 flex items-center gap-1.5"><MapPin className="w-3 h-3" /> Matched location</div>
+                <div className="text-sm text-slate-100">{matched.name}{matched.admin1 ? `, ${matched.admin1}` : ''}{matched.country ? `, ${matched.country}` : ''}</div>
+                <div className="text-[10px] mono text-slate-500 mt-1">{matched.latitude.toFixed(4)}°, {matched.longitude.toFixed(4)}° · {matched.timezone || 'auto'}</div>
+              </div>
+            )}
+
             <div className="pt-3 border-t border-[#1f1f27] text-[11px] text-slate-500 leading-relaxed">
-              Data lineage: <span className="text-slate-300">Open-Meteo</span> supplies live temperature, irradiance (GHI), cloud cover and wind for the searched location. AC power is derived server-side using cell-temp derating and 97% conversion efficiency — the same transparent formula as the plant digital twin.
+              Data lineage: <span className="text-slate-300">Open-Meteo</span> supplies live temperature, irradiance (GHI), cloud cover and wind. AC power is derived server-side using cell-temp derating and 97% conversion efficiency — the same transparent formula as the plant digital twin.
             </div>
           </div>
         </Panel>
@@ -175,8 +130,8 @@ export default function Predictor() {
                 <div className="w-16 h-16 mx-auto rounded-full bg-slate-800/60 grid place-items-center mb-4">
                   <Sun className="w-8 h-8 text-slate-600" />
                 </div>
-                <div className="text-slate-300 font-medium">Search a city, choose a plant size, then Predict</div>
-                <div className="text-xs text-slate-500 mt-2">We’ll fetch 48 hours of real weather data and estimate expected AC power.</div>
+                <div className="text-slate-300 font-medium">Type a location, choose a plant size, then Predict</div>
+                <div className="text-xs text-slate-500 mt-2">We'll fetch 48 hours of real weather data and estimate expected AC power.</div>
               </div>
             </Panel>
           )}
@@ -259,8 +214,4 @@ export default function Predictor() {
       </div>
     </div>
   );
-}
-
-function formatLocation(item) {
-  return [item.name, item.admin1, item.country].filter(Boolean).join(', ');
 }
