@@ -1,80 +1,89 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Panel, KpiCard } from '../../components/scada/Atoms';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Button } from '../../components/ui/button';
 import { Slider } from '../../components/ui/slider';
-import { MapPin, Sun, Thermometer, Wind, Cloud, Zap, Battery, Loader2, AlertCircle } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, ComposedChart, Bar } from 'recharts';
+import { MapPin, Sun, Cloud, Zap, Battery, Loader2, AlertCircle, Search, Wind, Thermometer } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Area, ComposedChart } from 'recharts';
 import { toast } from 'sonner';
+import { geocode, getForecast } from '../../lib/api';
 
 const axisColor = '#475569';
 const grid = '#1f2937';
 
-const PRESETS = [
-  { name: 'Bengaluru, IN', lat: 12.9716, lon: 77.5946 },
-  { name: 'Berlin, DE', lat: 52.5200, lon: 13.4050 },
-  { name: 'Phoenix, US', lat: 33.4484, lon: -112.0740 },
-  { name: 'Sydney, AU', lat: -33.8688, lon: 151.2093 },
-  { name: 'Cairo, EG', lat: 30.0444, lon: 31.2357 },
-  { name: 'Tokyo, JP', lat: 35.6762, lon: 139.6503 },
-];
-
-// Mock predictor: build 48h synthetic forecast around a sun curve seeded by lat
-function mockForecast(lat, lon, size_kw) {
-  const solarNoon = 12;
-  const absLat = Math.abs(lat);
-  const peakGhi = Math.max(180, 1000 - absLat * 8); // higher near equator
-  const now = new Date();
-  const rows = [];
-  for (let i = 0; i < 48; i++) {
-    const t = new Date(now.getTime() + i * 3600 * 1000);
-    const hourLocal = t.getHours() + lon / 15;
-    const h = ((hourLocal % 24) + 24) % 24;
-    const dayProg = Math.cos(((h - solarNoon) / 6) * (Math.PI / 2));
-    const ghi = h >= 6 && h <= 18 ? Math.max(0, dayProg * peakGhi + (Math.random() - 0.5) * 40) : 0;
-    const ambient = 22 + (30 - absLat / 3) * 0.4 + Math.sin(h / 24 * 2 * Math.PI) * 5 + (Math.random() - 0.5) * 2;
-    const tCell = ambient + ((45 - 20) / 800) * ghi;
-    const tempFactor = Math.min(1, Math.max(0.75, 1 - 0.0042 * Math.max(tCell - 25, 0)));
-    const pDC = size_kw * (ghi / 1000) * tempFactor;
-    const pAC = Math.min(size_kw, Math.max(0, pDC * 0.97));
-    rows.push({
-      time: `${String(t.getHours()).padStart(2, '0')}:00`,
-      day: t.toLocaleDateString('en-GB', { weekday: 'short' }),
-      ghi: +ghi.toFixed(0),
-      ambient: +ambient.toFixed(1),
-      module: +tCell.toFixed(1),
-      ac: +pAC.toFixed(2),
-    });
-  }
-  return rows;
-}
-
 export default function Predictor() {
-  const [city, setCity] = useState('Bengaluru, IN');
-  const [lat, setLat] = useState(12.9716);
-  const [lon, setLon] = useState(77.5946);
+  const [query, setQuery] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [showSug, setShowSug] = useState(false);
+  const [selected, setSelected] = useState(null); // { name, country, admin1, latitude, longitude }
   const [size, setSize] = useState([500]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const debRef = useRef(null);
+  const boxRef = useRef(null);
 
-  const run = () => {
-    setLoading(true);
-    setTimeout(() => {
-      const rows = mockForecast(lat, lon, size[0]);
-      const totalEnergy = rows.reduce((a, r) => a + r.ac, 0);
-      const peak = Math.max(...rows.map((r) => r.ac));
-      const capacityFactor = totalEnergy / (rows.length * size[0]);
-      setResult({ rows, totalEnergy, peak, capacityFactor, currentGhi: rows[0].ghi, currentAmbient: rows[0].ambient });
-      setLoading(false);
-      toast.success(`Forecast generated for ${city}`, { description: `≈ ${totalEnergy.toFixed(0)} kWh over next 48h` });
-    }, 800);
+  // Debounced geocoding
+  useEffect(() => {
+    if (!query || query.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    if (debRef.current) clearTimeout(debRef.current);
+    debRef.current = setTimeout(async () => {
+      try {
+        setSearching(true);
+        const results = await geocode(query, 8);
+        setSuggestions(results);
+        setShowSug(true);
+      } catch (e) {
+        setSuggestions([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 350);
+    return () => debRef.current && clearTimeout(debRef.current);
+  }, [query]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const onClick = (e) => {
+      if (boxRef.current && !boxRef.current.contains(e.target)) setShowSug(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, []);
+
+  const pick = (item) => {
+    setSelected(item);
+    setQuery(formatLocation(item));
+    setShowSug(false);
+    setResult(null);
   };
 
-  const applyPreset = (p) => {
-    setCity(p.name);
-    setLat(p.lat);
-    setLon(p.lon);
+  const run = async () => {
+    if (!selected) {
+      toast.error('Please select a location from the list first');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const data = await getForecast(selected.latitude, selected.longitude, size[0], 48);
+      setResult(data);
+      toast.success(`Forecast generated for ${selected.name}`, {
+        description: `≈ ${data.totals.energy_kwh.toFixed(0)} kWh over next ${data.hours}h · peak ${data.totals.peak_kw.toFixed(1)} kW`,
+      });
+    } catch (e) {
+      const msg = e?.response?.data?.detail || e.message || 'Forecast failed';
+      setError(msg);
+      toast.error('Forecast failed', { description: msg });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -86,7 +95,7 @@ export default function Predictor() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-xl font-semibold text-slate-50">Location-aware yield predictor</div>
-            <div className="text-sm text-slate-400 mt-1">Enter any location on Earth. We model expected AC power for the next 48 hours using irradiance, cell-temperature derating and 97% conversion efficiency — the same transparent formula as the plant digital twin.</div>
+            <div className="text-sm text-slate-400 mt-1">Search any city on Earth. We call the live Open-Meteo forecast API and apply the transparent PV model (cell-temperature derating + 97% conversion) to estimate expected AC power for the next 48 hours.</div>
           </div>
         </div>
       </div>
@@ -94,20 +103,46 @@ export default function Predictor() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Panel title="Site inputs" className="lg:col-span-1">
           <div className="space-y-4">
-            <div>
-              <Label className="text-slate-400 text-xs">Location name</Label>
-              <Input value={city} onChange={(e) => setCity(e.target.value)} className="mt-1 bg-[#0a0a0f] border-slate-700" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-slate-400 text-xs">Latitude</Label>
-                <Input type="number" step="0.0001" value={lat} onChange={(e) => setLat(parseFloat(e.target.value) || 0)} className="mt-1 bg-[#0a0a0f] border-slate-700 mono" />
+            <div ref={boxRef} className="relative">
+              <Label className="text-slate-400 text-xs">Location</Label>
+              <div className="relative mt-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <Input
+                  value={query}
+                  onChange={(e) => { setQuery(e.target.value); setSelected(null); }}
+                  onFocus={() => suggestions.length > 0 && setShowSug(true)}
+                  placeholder="Search a city, e.g. Bengaluru, Berlin, Phoenix…"
+                  className="pl-9 pr-9 bg-[#0a0a0f] border-slate-700"
+                />
+                {searching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 animate-spin" />}
               </div>
-              <div>
-                <Label className="text-slate-400 text-xs">Longitude</Label>
-                <Input type="number" step="0.0001" value={lon} onChange={(e) => setLon(parseFloat(e.target.value) || 0)} className="mt-1 bg-[#0a0a0f] border-slate-700 mono" />
-              </div>
+              {showSug && suggestions.length > 0 && (
+                <div className="absolute z-30 mt-1 w-full max-h-72 overflow-y-auto panel border border-slate-700">
+                  {suggestions.map((s, i) => (
+                    <button
+                      key={`${s.name}-${s.latitude}-${s.longitude}-${i}`}
+                      onClick={() => pick(s)}
+                      className="w-full text-left px-3 py-2 hover:bg-slate-800/60 border-b border-[#1f1f27] last:border-b-0 transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <div className="text-sm text-slate-100">{s.name}</div>
+                          <div className="text-[10px] text-slate-500">{[s.admin1, s.country].filter(Boolean).join(', ')}</div>
+                        </div>
+                        <div className="font-mono text-[10px] text-slate-500">{s.latitude.toFixed(2)}, {s.longitude.toFixed(2)}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {selected && (
+                <div className="mt-2 flex items-center gap-2 text-[10px] font-mono text-slate-500">
+                  <MapPin className="w-3 h-3" />
+                  <span>Selected: {selected.latitude.toFixed(4)}°, {selected.longitude.toFixed(4)}° · {selected.timezone || 'auto'}</span>
+                </div>
+              )}
             </div>
+
             <div>
               <div className="flex items-center justify-between">
                 <Label className="text-slate-400 text-xs">Plant size</Label>
@@ -117,44 +152,45 @@ export default function Predictor() {
               <div className="flex justify-between text-[10px] font-mono text-slate-500 mt-1"><span>5 kW</span><span>2 MW</span></div>
             </div>
 
-            <Button onClick={run} disabled={loading} className="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-semibold">
-              {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Modeling forecast…</> : <><Zap className="w-4 h-4 mr-2" /> Predict yield</>}
+            <Button onClick={run} disabled={loading || !selected} className="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
+              {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Calling Open-Meteo…</> : <><Zap className="w-4 h-4 mr-2" /> Predict yield</>}
             </Button>
 
-            <div className="pt-3 border-t border-[#1f1f27]">
-              <div className="text-[10px] font-mono text-slate-500 uppercase mb-2">Quick presets</div>
-              <div className="grid grid-cols-2 gap-2">
-                {PRESETS.map((p) => (
-                  <button key={p.name} onClick={() => applyPreset(p)} className="text-xs text-slate-300 hover:text-cyan-400 border border-slate-700 hover:border-cyan-500/40 rounded-md px-2 py-1.5 transition-colors text-left">
-                    {p.name}
-                  </button>
-                ))}
-              </div>
+            <div className="pt-3 border-t border-[#1f1f27] text-[11px] text-slate-500 leading-relaxed">
+              Data lineage: <span className="text-slate-300">Open-Meteo</span> supplies live temperature, irradiance (GHI), cloud cover and wind for the searched location. AC power is derived server-side using cell-temp derating and 97% conversion efficiency — the same transparent formula as the plant digital twin.
             </div>
           </div>
         </Panel>
 
         <div className="lg:col-span-2 space-y-4">
-          {!result ? (
+          {error && (
+            <div className="panel p-4 border-red-500/30 border">
+              <div className="flex items-start gap-3"><AlertCircle className="w-5 h-5 text-red-400 mt-0.5" /><div><div className="font-semibold text-red-400">Forecast unavailable</div><div className="text-sm text-slate-400 mt-1">{error}</div></div></div>
+            </div>
+          )}
+
+          {!result && !error && (
             <Panel title="Forecast output">
               <div className="py-16 text-center">
                 <div className="w-16 h-16 mx-auto rounded-full bg-slate-800/60 grid place-items-center mb-4">
                   <Sun className="w-8 h-8 text-slate-600" />
                 </div>
-                <div className="text-slate-300 font-medium">Enter a location & press Predict</div>
-                <div className="text-xs text-slate-500 mt-2">We’ll simulate 48 hours of AC power based on latitude, cell-temperature derating and conversion efficiency.</div>
+                <div className="text-slate-300 font-medium">Search a city, choose a plant size, then Predict</div>
+                <div className="text-xs text-slate-500 mt-2">We’ll fetch 48 hours of real weather data and estimate expected AC power.</div>
               </div>
             </Panel>
-          ) : (
+          )}
+
+          {result && (
             <>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <KpiCard label="Peak AC power" value={result.peak.toFixed(1)} unit="kW" tone="info" icon={Zap} sub="in next 48h" />
-                <KpiCard label="Energy 48h" value={result.totalEnergy.toFixed(0)} unit="kWh" tone="good" icon={Battery} sub="cumulative" />
-                <KpiCard label="Capacity factor" value={(result.capacityFactor * 100).toFixed(1)} unit="%" tone="info" icon={Sun} sub="modelled" />
-                <KpiCard label="Current GHI" value={result.currentGhi} unit="W/m²" icon={Cloud} sub={`Ambient ${result.currentAmbient.toFixed(1)}°C`} />
+                <KpiCard label="Peak AC power" value={result.totals.peak_kw.toFixed(1)} unit="kW" tone="info" icon={Zap} sub={`in next ${result.hours}h`} />
+                <KpiCard label="Energy 48h" value={result.totals.energy_kwh.toFixed(0)} unit="kWh" tone="good" icon={Battery} sub="cumulative" />
+                <KpiCard label="Capacity factor" value={result.totals.capacity_factor_pct.toFixed(1)} unit="%" tone="info" icon={Sun} sub="modelled" />
+                <KpiCard label="Current GHI" value={result.rows[0]?.ghi_w_m2?.toFixed(0) ?? '0'} unit="W/m²" icon={Cloud} sub={`Ambient ${result.rows[0]?.ambient_c?.toFixed(1) ?? '–'}°C`} />
               </div>
 
-              <Panel title="48-hour AC power forecast" right={<span className="mono text-[10px] text-slate-500">{lat.toFixed(3)}, {lon.toFixed(3)}</span>}>
+              <Panel title="48-hour AC power forecast" right={<span className="mono text-[10px] text-slate-500">{result.location.latitude?.toFixed(3)}, {result.location.longitude?.toFixed(3)} · {result.meta.source}</span>}>
                 <div style={{ height: 260 }}>
                   <ResponsiveContainer>
                     <ComposedChart data={result.rows}>
@@ -165,18 +201,25 @@ export default function Predictor() {
                         </linearGradient>
                       </defs>
                       <CartesianGrid stroke={grid} strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="time" stroke={axisColor} fontSize={10} tickLine={false} axisLine={false} interval={2} />
-                      <YAxis yAxisId="l" stroke={axisColor} fontSize={10} tickLine={false} axisLine={false} />
+                      <XAxis dataKey="hour" stroke={axisColor} fontSize={10} tickLine={false} axisLine={false} interval={2} />
+                      <YAxis yAxisId="l" stroke={axisColor} fontSize={10} tickLine={false} axisLine={false} label={{ value: 'kW', angle: -90, position: 'insideLeft', fill: axisColor, fontSize: 10 }} />
                       <YAxis yAxisId="r" orientation="right" stroke={axisColor} fontSize={10} tickLine={false} axisLine={false} />
-                      <Tooltip contentStyle={{ background: '#0d0d13', border: '1px solid #1f1f27', fontSize: 12 }} />
+                      <Tooltip contentStyle={{ background: '#0d0d13', border: '1px solid #1f1f27', fontSize: 12 }} labelFormatter={(v, payload) => payload?.[0]?.payload?.time || v} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Area yAxisId="l" dataKey="ac" stroke="#06b6d4" strokeWidth={2} fill="url(#acp)" name="AC kW" />
-                      <Line yAxisId="r" dataKey="ghi" stroke="#f59e0b" strokeWidth={2} dot={false} name="GHI W/m²" />
-                      <Line yAxisId="r" dataKey="module" stroke="#ef4444" strokeWidth={1.5} dot={false} name="Module °C" strokeDasharray="4 4" />
+                      <Area yAxisId="l" dataKey="ac_kw" stroke="#06b6d4" strokeWidth={2} fill="url(#acp)" name="AC kW" />
+                      <Line yAxisId="r" dataKey="ghi_w_m2" stroke="#f59e0b" strokeWidth={2} dot={false} name="GHI W/m²" />
+                      <Line yAxisId="r" dataKey="module_c" stroke="#ef4444" strokeWidth={1.5} dot={false} name="Module °C" strokeDasharray="4 4" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
               </Panel>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="panel p-3"><div className="text-[10px] font-mono text-slate-500 uppercase">Response time</div><div className="mono text-slate-100 mt-1">{result.meta.response_ms} ms</div></div>
+                <div className="panel p-3"><div className="text-[10px] font-mono text-slate-500 uppercase">Timezone</div><div className="mono text-slate-100 mt-1">{result.location.timezone || 'auto'}</div></div>
+                <div className="panel p-3"><div className="text-[10px] font-mono text-slate-500 uppercase">Rows</div><div className="mono text-slate-100 mt-1">{result.hours}</div></div>
+                <div className="panel p-3"><div className="text-[10px] font-mono text-slate-500 uppercase">Plant size</div><div className="mono text-slate-100 mt-1">{result.size_kw} kW</div></div>
+              </div>
 
               <Panel title="Hourly breakdown" right={<span className="text-[10px] font-mono text-slate-500">first 24 rows</span>}>
                 <div className="overflow-x-auto max-h-72 overflow-y-auto">
@@ -186,6 +229,8 @@ export default function Predictor() {
                         <th className="py-2 pr-3">Time</th>
                         <th className="py-2 pr-3">Day</th>
                         <th className="py-2 pr-3 text-right">GHI</th>
+                        <th className="py-2 pr-3 text-right">Cloud</th>
+                        <th className="py-2 pr-3 text-right">Wind</th>
                         <th className="py-2 pr-3 text-right">Ambient</th>
                         <th className="py-2 pr-3 text-right">Module</th>
                         <th className="py-2 pr-3 text-right">AC kW</th>
@@ -194,31 +239,28 @@ export default function Predictor() {
                     <tbody>
                       {result.rows.slice(0, 24).map((r, i) => (
                         <tr key={i} className="border-b border-[#141419]">
-                          <td className="py-1.5 pr-3 mono text-slate-200">{r.time}</td>
+                          <td className="py-1.5 pr-3 mono text-slate-200">{r.hour}</td>
                           <td className="py-1.5 pr-3 text-slate-400">{r.day}</td>
-                          <td className="py-1.5 pr-3 text-right mono text-slate-200">{r.ghi}</td>
-                          <td className="py-1.5 pr-3 text-right mono text-slate-200">{r.ambient.toFixed(1)}°</td>
-                          <td className="py-1.5 pr-3 text-right mono text-slate-200">{r.module.toFixed(1)}°</td>
-                          <td className="py-1.5 pr-3 text-right mono text-cyan-400">{r.ac.toFixed(2)}</td>
+                          <td className="py-1.5 pr-3 text-right mono text-slate-200">{r.ghi_w_m2}</td>
+                          <td className="py-1.5 pr-3 text-right mono text-slate-400">{r.cloud_pct}%</td>
+                          <td className="py-1.5 pr-3 text-right mono text-slate-400">{r.wind_ms}</td>
+                          <td className="py-1.5 pr-3 text-right mono text-slate-200">{r.ambient_c.toFixed(1)}°</td>
+                          <td className="py-1.5 pr-3 text-right mono text-slate-200">{r.module_c.toFixed(1)}°</td>
+                          <td className="py-1.5 pr-3 text-right mono text-cyan-400">{r.ac_kw.toFixed(2)}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               </Panel>
-
-              <div className="panel p-4 border-amber-500/20 border">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-amber-400 mt-0.5" />
-                  <div className="text-sm text-slate-300">
-                    <span className="font-semibold text-amber-400">Data lineage:</span> This preview uses a client-side irradiance model seeded by latitude. When wired to the backend it will call Open-Meteo (<span className="mono text-xs">/v1/forecast</span>) with the same coordinates and use the transparent PV formula.
-                  </div>
-                </div>
-              </div>
             </>
           )}
         </div>
       </div>
     </div>
   );
+}
+
+function formatLocation(item) {
+  return [item.name, item.admin1, item.country].filter(Boolean).join(', ');
 }
