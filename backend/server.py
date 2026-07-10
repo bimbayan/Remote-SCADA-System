@@ -42,6 +42,8 @@ logger = logging.getLogger(__name__)
 
 OPEN_METEO_FORECAST = "https://api.open-meteo.com/v1/forecast"
 OPEN_METEO_GEOCODE = "https://geocoding-api.open-meteo.com/v1/search"
+NOMINATIM_SEARCH = "https://nominatim.openstreetmap.org/search"
+NOMINATIM_UA = "SolarisSCADA/1.0 (demo; educational)"
 
 CURRENT_FIELDS = ",".join(
     [
@@ -82,12 +84,12 @@ def apply_pv_model(ghi: float, ambient_c: float, size_kw: float) -> Dict[str, fl
     }
 
 
-async def _get(url: str, params: Dict[str, Any]) -> Dict[str, Any]:
+async def _get(url: str, params: Dict[str, Any], headers: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     """HTTP GET with timing + error normalisation."""
     started = time.perf_counter()
     try:
         async with httpx.AsyncClient(timeout=15.0) as http:
-            resp = await http.get(url, params=params)
+            resp = await http.get(url, params=params, headers=headers or {})
             resp.raise_for_status()
             data = resp.json()
     except httpx.HTTPStatusError as e:
@@ -99,6 +101,65 @@ async def _get(url: str, params: Dict[str, Any]) -> Dict[str, Any]:
         raise HTTPException(status_code=502, detail=f"Upstream unreachable: {e}") from e
     elapsed_ms = int((time.perf_counter() - started) * 1000)
     return {"data": data, "response_ms": elapsed_ms}
+
+
+async def _try_nominatim(q: str, count: int) -> List[Dict[str, Any]]:
+    """Fallback geocoder using OpenStreetMap Nominatim.
+
+    Covers landmarks, universities, streets, POIs — everything Open-Meteo misses.
+    Requires a descriptive User-Agent per OSM usage policy.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as http:
+            resp = await http.get(
+                NOMINATIM_SEARCH,
+                params={
+                    "q": q,
+                    "format": "json",
+                    "addressdetails": 1,
+                    "limit": max(1, min(count, 20)),
+                    "accept-language": "en",
+                },
+                headers={"User-Agent": NOMINATIM_UA, "Accept": "application/json"},
+            )
+            if resp.status_code != 200:
+                return []
+            hits = resp.json() or []
+    except httpx.HTTPError:
+        return []
+
+    results: List[Dict[str, Any]] = []
+    for h in hits:
+        try:
+            lat = float(h.get("lat"))
+            lon = float(h.get("lon"))
+        except (TypeError, ValueError):
+            continue
+        addr = h.get("address") or {}
+        # Pick the most useful "name" — first the object's own name, else its city/town/village
+        name = (
+            h.get("name")
+            or addr.get("city")
+            or addr.get("town")
+            or addr.get("village")
+            or addr.get("suburb")
+            or addr.get("neighbourhood")
+            or (h.get("display_name") or "").split(",", 1)[0]
+            or q
+        )
+        results.append(
+            {
+                "name": name,
+                "country": addr.get("country"),
+                "admin1": addr.get("state") or addr.get("region") or addr.get("county"),
+                "latitude": lat,
+                "longitude": lon,
+                "timezone": None,  # Open-Meteo forecast will auto-resolve when called with lat/lon
+                "population": None,
+                "country_code": (addr.get("country_code") or "").upper() or None,
+            }
+        )
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -167,29 +228,48 @@ async def health() -> Dict[str, Any]:
 
 @api_router.get("/geocode", response_model=GeocodeResponse)
 async def geocode(
-    q: str = Query(..., min_length=2, description="City or place name"),
+    q: str = Query(..., min_length=2, description="City, landmark or place name"),
     count: int = Query(6, ge=1, le=20),
 ) -> GeocodeResponse:
-    """Search cities via Open-Meteo geocoding (keyless)."""
-    payload = await _get(
-        OPEN_METEO_GEOCODE,
-        {"name": q, "count": count, "language": "en", "format": "json"},
-    )
-    raw = payload["data"].get("results") or []
-    results = [
-        GeocodeItem(
-            name=r.get("name", ""),
-            country=r.get("country"),
-            admin1=r.get("admin1"),
-            latitude=r["latitude"],
-            longitude=r["longitude"],
-            timezone=r.get("timezone"),
-            population=r.get("population"),
-            country_code=r.get("country_code"),
+    """Search places with a two-tier strategy:
+    1. Open-Meteo geocoding (fast, city/town level, no key).
+    2. If no results, fall back to OSM Nominatim which covers landmarks,
+       universities, streets and other POIs.
+    """
+    # Tier 1 — Open-Meteo
+    om_hits: List[Dict[str, Any]] = []
+    try:
+        payload = await _get(
+            OPEN_METEO_GEOCODE,
+            {"name": q, "count": count, "language": "en", "format": "json"},
         )
-        for r in raw
-        if "latitude" in r and "longitude" in r
-    ]
+        om_hits = payload["data"].get("results") or []
+    except HTTPException:
+        om_hits = []
+
+    results: List[GeocodeItem] = []
+    for r in om_hits:
+        if "latitude" not in r or "longitude" not in r:
+            continue
+        results.append(
+            GeocodeItem(
+                name=r.get("name", ""),
+                country=r.get("country"),
+                admin1=r.get("admin1"),
+                latitude=r["latitude"],
+                longitude=r["longitude"],
+                timezone=r.get("timezone"),
+                population=r.get("population"),
+                country_code=r.get("country_code"),
+            )
+        )
+
+    # Tier 2 — Nominatim fallback for landmarks / POIs
+    if not results:
+        osm_hits = await _try_nominatim(q, count)
+        for r in osm_hits:
+            results.append(GeocodeItem(**r))
+
     return GeocodeResponse(results=results)
 
 
