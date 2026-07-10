@@ -108,7 +108,12 @@ async def _try_nominatim(q: str, count: int) -> List[Dict[str, Any]]:
 
     Covers landmarks, universities, streets, POIs — everything Open-Meteo misses.
     Requires a descriptive User-Agent per OSM usage policy.
+
+    NOTE: Nominatim's `limit=1` occasionally returns an empty array even when
+    matches exist. We therefore always request at least 5 candidates and slice
+    on our side. See: https://nominatim.org/release-docs/latest/api/Search/
     """
+    fetch_limit = max(5, min(count, 20))
     try:
         async with httpx.AsyncClient(timeout=15.0) as http:
             resp = await http.get(
@@ -117,15 +122,17 @@ async def _try_nominatim(q: str, count: int) -> List[Dict[str, Any]]:
                     "q": q,
                     "format": "json",
                     "addressdetails": 1,
-                    "limit": max(1, min(count, 20)),
+                    "limit": fetch_limit,
                     "accept-language": "en",
                 },
                 headers={"User-Agent": NOMINATIM_UA, "Accept": "application/json"},
             )
             if resp.status_code != 200:
+                logger.warning("Nominatim non-200: %s", resp.status_code)
                 return []
             hits = resp.json() or []
-    except httpx.HTTPError:
+    except httpx.HTTPError as e:
+        logger.warning("Nominatim request failed: %s", e)
         return []
 
     results: List[Dict[str, Any]] = []
@@ -136,7 +143,6 @@ async def _try_nominatim(q: str, count: int) -> List[Dict[str, Any]]:
         except (TypeError, ValueError):
             continue
         addr = h.get("address") or {}
-        # Pick the most useful "name" — first the object's own name, else its city/town/village
         name = (
             h.get("name")
             or addr.get("city")
@@ -154,11 +160,13 @@ async def _try_nominatim(q: str, count: int) -> List[Dict[str, Any]]:
                 "admin1": addr.get("state") or addr.get("region") or addr.get("county"),
                 "latitude": lat,
                 "longitude": lon,
-                "timezone": None,  # Open-Meteo forecast will auto-resolve when called with lat/lon
+                "timezone": None,
                 "population": None,
                 "country_code": (addr.get("country_code") or "").upper() or None,
             }
         )
+        if len(results) >= count:
+            break
     return results
 
 
