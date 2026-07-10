@@ -111,7 +111,7 @@ export default function Predictor() {
                   value={query}
                   onChange={(e) => { setQuery(e.target.value); setSelected(null); }}
                   onFocus={() => suggestions.length > 0 && setShowSug(true)}
-                  placeholder="Search a city, e.g. Bengaluru, Berlin, Phoenix…"
+                  placeholder="Search any city on Earth…"
                   className="pl-9 pr-9 bg-[#0a0a0f] border-slate-700"
                 />
                 {searching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 animate-spin" />}

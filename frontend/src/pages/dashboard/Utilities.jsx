@@ -2,11 +2,13 @@ import React from 'react';
 import { Panel, Donut, Led, ProgressBar } from '../../components/scada/Atoms';
 import { BATTERY, KPI, SUBSTATION, RECOMMENDATIONS, PLANT_INFO } from '../../mock/mock';
 import { Battery, Sun, Thermometer, Wind, Droplets, CheckCircle2, AlertTriangle, Info } from 'lucide-react';
+import { useLocation, formatLocation } from '../../lib/locationContext';
 
 const levelIcon = { info: Info, warning: AlertTriangle, success: CheckCircle2 };
 const levelTone = { info: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30', warning: 'text-amber-400 bg-amber-500/10 border-amber-500/30', success: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' };
 
 export default function Utilities() {
+  const { location: plant } = useLocation();
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -105,13 +107,13 @@ export default function Utilities() {
 
       <Panel title="System information">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-          <div><div className="text-[10px] font-mono text-slate-500 uppercase">Plant name</div><div className="text-slate-100 mt-1">{PLANT_INFO.name}</div></div>
+          <div><div className="text-[10px] font-mono text-slate-500 uppercase">Plant name</div><div className="text-slate-100 mt-1">{plant.name}</div></div>
           <div><div className="text-[10px] font-mono text-slate-500 uppercase">Rated capacity</div><div className="mono text-slate-100 mt-1">{PLANT_INFO.capacity_kw} kW AC</div></div>
           <div><div className="text-[10px] font-mono text-slate-500 uppercase">Inverters</div><div className="mono text-slate-100 mt-1">{PLANT_INFO.inverters} × 100 kW</div></div>
           <div><div className="text-[10px] font-mono text-slate-500 uppercase">Battery</div><div className="mono text-slate-100 mt-1">{PLANT_INFO.battery_kwh} kWh</div></div>
-          <div><div className="text-[10px] font-mono text-slate-500 uppercase">Latitude</div><div className="mono text-slate-100 mt-1">{PLANT_INFO.latitude}°</div></div>
-          <div><div className="text-[10px] font-mono text-slate-500 uppercase">Longitude</div><div className="mono text-slate-100 mt-1">{PLANT_INFO.longitude}°</div></div>
-          <div><div className="text-[10px] font-mono text-slate-500 uppercase">Commissioned</div><div className="mono text-slate-100 mt-1">{PLANT_INFO.commissioned}</div></div>
+          <div><div className="text-[10px] font-mono text-slate-500 uppercase">Location</div><div className="text-slate-100 mt-1">{formatLocation(plant)}</div></div>
+          <div><div className="text-[10px] font-mono text-slate-500 uppercase">Coordinates</div><div className="mono text-slate-100 mt-1">{plant.latitude.toFixed(4)}°, {plant.longitude.toFixed(4)}°</div></div>
+          <div><div className="text-[10px] font-mono text-slate-500 uppercase">Timezone</div><div className="mono text-slate-100 mt-1">{plant.timezone || 'auto'}</div></div>
           <div><div className="text-[10px] font-mono text-slate-500 uppercase">SCADA version</div><div className="mono text-slate-100 mt-1">v3.0.4</div></div>
         </div>
       </Panel>

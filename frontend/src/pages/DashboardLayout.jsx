@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Outlet, NavLink, Link, useLocation } from 'react-router-dom';
+import { Outlet, NavLink, Link, useLocation as useRouterLocation } from 'react-router-dom';
 import { Sun, Home, LayoutDashboard, Sliders, Grid3x3, Cable, BellRing, LineChart, Wrench, MapPin, Wifi, WifiOff, ChevronLeft, Menu, ExternalLink } from 'lucide-react';
-import { ALARMS, PLANT_INFO } from '../mock/mock';
-import { Badge } from '../components/ui/badge';
+import { ALARMS } from '../mock/mock';
+import LocationPicker from '../components/scada/LocationPicker';
+import { useLocation } from '../lib/locationContext';
 
 const NAV = [
   { to: 'home', label: 'Home', icon: Home, code: '01' },
@@ -29,7 +30,8 @@ export default function DashboardLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [online, setOnline] = useState(true);
   const now = useClock();
-  const loc = useLocation();
+  const loc = useRouterLocation();
+  const { location: plant } = useLocation();
 
   useEffect(() => {
     // Flicker "link" indicator lightly
@@ -97,18 +99,20 @@ export default function DashboardLayout() {
       {/* MAIN */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* TOPBAR */}
-        <header className="h-14 border-b border-[#1f1f27] bg-[#0d0d13] flex items-center px-6 gap-6">
-          <div>
+        <header className="h-14 border-b border-[#1f1f27] bg-[#0d0d13] flex items-center px-6 gap-4">
+          <div className="min-w-0">
             <div className="text-[10px] font-mono tracking-widest text-slate-500 uppercase">Plant</div>
-            <div className="text-sm font-semibold text-slate-100 leading-none mt-0.5">{PLANT_INFO.name}</div>
+            <div className="text-sm font-semibold text-slate-100 leading-none mt-0.5 truncate max-w-[260px]">{plant.name}</div>
           </div>
-          <div className="h-8 w-px bg-[#1f1f27]" />
+          <div className="h-8 w-px bg-[#1f1f27] hidden md:block" />
           <div className="hidden md:block">
-            <div className="text-[10px] font-mono tracking-widest text-slate-500 uppercase">Location</div>
-            <div className="text-sm text-slate-300 leading-none mt-0.5">{PLANT_INFO.city} · {PLANT_INFO.latitude.toFixed(3)}, {PLANT_INFO.longitude.toFixed(3)}</div>
+            <div className="text-[10px] font-mono tracking-widest text-slate-500 uppercase">Coordinates</div>
+            <div className="text-sm text-slate-300 leading-none mt-0.5 mono">{plant.latitude.toFixed(3)}, {plant.longitude.toFixed(3)}</div>
           </div>
 
           <div className="flex-1" />
+
+          <LocationPicker />
 
           <div className="flex items-center gap-2 px-3 py-1 rounded-md border border-[#1f1f27] bg-[#0a0a0f]">
             {online ? <Wifi className="w-3.5 h-3.5 text-emerald-400" /> : <WifiOff className="w-3.5 h-3.5 text-red-400" />}
