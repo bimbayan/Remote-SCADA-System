@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "80:80"
+    volumes:
+      - ./src:/usr/share/nginx/html:ro
+    restart: always
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGO_URL=mongodb://mongo:27017
+      - DB_NAME=scada_db
+    # Uncomment the following lines if you want to use MongoDB
+    # depends_on:
+    #   - mongo
+    restart: always
+
+  # Uncomment the following section if you want to use MongoDB
+  # mongo:
+  #   image: mongo:5.0
+  #   restart: always
+  #   volumes:
+  #     - mongo_data:/data/db
+  #   ports:
+  #     - "27017:27017"
+
+  caddy:
+    image: caddy:2.7-alpine
+    container_name: caddy_proxy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  # Uncomment if using MongoDB
+  # mongo_data:
+  caddy_data:
+  caddy_config:
