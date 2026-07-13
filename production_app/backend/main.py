@@ -19,6 +19,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
+from websockets.exceptions import ConnectionClosed
 
 # ---------------------------------------------------------------------------
 # Setup
@@ -295,7 +296,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         while True:
             await websocket.send_text(json.dumps(make_sensor_snapshot()))
             await asyncio.sleep(2)
-    except WebSocketDisconnect:
+    except (WebSocketDisconnect, ConnectionClosed, RuntimeError):
         logger.info("WebSocket client disconnected")
 
 
