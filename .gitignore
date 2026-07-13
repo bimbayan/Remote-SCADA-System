@@ -63,6 +63,11 @@ chainlit.md
 
 # Data and databases
 agenthub/agents/youtube/db
+production_app/data/scada.db
+production_app/data/scada.db-shm
+production_app/data/scada.db-wal
+production_app/data/live/
+production_app/data/logs/
 
 # Archive files and large assets
 **/*.zip

@@ -1,0 +1,21 @@
+ts,source,severity,message
+2025-12-27T18:59:14,INV-04,Critical,Inverter fault detected
+2025-12-27T19:03:29,INV-03,Critical,Inverter fault detected
+2025-12-27T19:05:14,INV-05,Critical,Inverter fault detected
+2025-12-27T19:13:19,INV-04,Critical,Inverter fault detected
+2025-12-27T19:47:03,INV-03,Critical,Inverter fault detected
+2025-12-27T19:48:48,INV-05,Critical,Inverter fault detected
+2025-12-27T19:56:53,INV-04,Critical,Inverter fault detected
+2025-12-27T22:37:49,INV-03,Critical,Inverter fault detected
+2025-12-27T22:39:34,INV-05,Critical,Inverter fault detected
+2025-12-29T15:17:12,INV-04,Critical,Inverter fault detected
+2025-12-29T15:21:27,INV-03,Critical,Inverter fault detected
+2025-12-29T15:23:12,INV-05,Critical,Inverter fault detected
+2025-12-29T15:31:17,INV-04,Critical,Inverter fault detected
+2025-12-29T15:37:57,INV-03,Critical,Inverter fault detected
+2025-12-29T16:06:12,INV-01,Critical,Inverter fault detected
+2025-12-31T15:47:54,INV-04,Critical,Inverter fault detected
+2025-12-31T15:52:09,INV-03,Critical,Inverter fault detected
+2025-12-31T15:53:54,INV-05,Critical,Inverter fault detected
+2025-12-31T16:01:59,INV-04,Critical,Inverter fault detected
+2025-12-31T16:08:39,INV-03,Critical,Inverter fault detected
