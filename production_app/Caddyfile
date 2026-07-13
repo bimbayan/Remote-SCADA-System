@@ -1,10 +1,21 @@
-# Caddyfile
+# Caddyfile for SolarisSCADA
+# Serves React frontend and proxies API requests to FastAPI backend
 
+# Main domain configuration
 remotescadasystem.com, www.remotescadasystem.com {
-    reverse_proxy dashboard:8501
+    root * /usr/share/nginx/html
+    file_server
+    
+    # API routes go to backend
+    route /api/* {
+        reverse_proxy backend:8000
+    }
+    
+    # Serve index.html for client-side routing (SPA fallback)
+    try_files {path} /index.html
 }
 
-# Fallback basic proxy for port 80 (Development/IP based access)
+# HTTP to HTTPS redirect (optional, handled by Render)
 :80 {
-    reverse_proxy dashboard:8501
+    redir https://{host}{uri}
 }
